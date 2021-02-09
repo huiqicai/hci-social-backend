@@ -1,0 +1,16 @@
+{
+  "settings": {
+    "loggerFormat": "tiny",
+    "session": {
+      "store": "@foal/typeorm",
+      "expirationTimeouts": {
+        "inactivity": 86400
+      }
+    }
+  },
+  "database": {
+    "type": "sqlite",
+    "database": "./db.sqlite3",
+    "synchronize": true
+  }
+}
