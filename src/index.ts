@@ -13,10 +13,17 @@ async function main() {
   const app = await createApp(AppController);
 
   const httpServer = http.createServer(app);
-  const port = Config.get('port', 'number', 3001);
-  httpServer.listen(port, () => {
-    console.log(`Listening on port ${port}...`);
-  });
+  const socket = Config.get('listen_socket', 'string');
+  if (socket) {
+    httpServer.listen(socket, () => {
+      console.log(`Listening on socket ${socket}...`);
+    });
+  } else {
+    const port = Config.get('port', 'number', 3001);
+    httpServer.listen(port, () => {
+      console.log(`Listening on port ${port}...`);
+    });
+  }
 }
 
 main()

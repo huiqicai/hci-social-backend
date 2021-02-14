@@ -22,6 +22,8 @@ build
 .env.development.local
 .env.test.local
 .env.production.local
+# Foal doesn't currently support .env.local :(
+.env
 
 # IDEs
 .vscode/
