@@ -1,6 +1,7 @@
-import { BaseEntity, Column, CreateDateColumn, Entity, JoinColumn, ManyToOne, OneToMany, PrimaryGeneratedColumn } from 'typeorm';
+import { BaseEntity, Column, CreateDateColumn, Entity, JoinColumn, ManyToOne, OneToMany, PrimaryGeneratedColumn, UpdateDateColumn } from 'typeorm';
 
 import { User } from './user.entity';
+import { getDateTimeType } from '../utils';
 
 @Entity()
 export class Post extends BaseEntity {
@@ -12,10 +13,22 @@ export class Post extends BaseEntity {
   @JoinColumn({ name: 'post_author_id' })
   author: User;
 
-  @CreateDateColumn({ name: 'post_created'})
+  @CreateDateColumn({
+    name: 'post_created',
+    type: getDateTimeType(),
+    // Our mariadb os old enough that multiple CURRENT_TIMESTAMPs cause an issue...
+    default: () => 0
+    //default: () => "CURRENT_TIMESTAMP"
+  })
   createdAt: Date;
 
-  @CreateDateColumn({ name: 'post_updated' })
+  @UpdateDateColumn({
+    name: 'post_updated',
+    type: getDateTimeType(),
+    // For some reason mariadb doesn't like what typeorm does by default, CURRENT_TIMESTAMP(6)
+    default: () => "CURRENT_TIMESTAMP",
+    onUpdate: "CURRENT_TIMESTAMP"
+  })
   updatedAt: Date;
 
   @Column({ name: 'post_type' })

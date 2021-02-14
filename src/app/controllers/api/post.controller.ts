@@ -155,7 +155,13 @@ export class PostController {
   @ValidateBody(postSchema)
   async createPost(ctx: Context<User>) {
     const post: Post = await getRepository(Post).save(
-      getPostParams(ctx.request.body, 'default')
+      {
+        ...getPostParams(ctx.request.body, 'default'),
+        // We can't have the DB set both of these with triggers, obnoxiously (see post.entity.ts)
+        // Because of that, we'll set *both* here to ensure that they're consistent
+        createdAt: new Date(),
+        updatedAt: new Date()
+      }
     );
     return new HttpResponseCreated(post);
   }

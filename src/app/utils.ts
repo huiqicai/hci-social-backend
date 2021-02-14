@@ -1,3 +1,5 @@
+import { Config } from "@foal/core";
+
 export function removeEmptyParams(obj: Record<string, unknown>) {
     let newObj = {};
     Object.keys(obj).forEach((key) => {
@@ -7,4 +9,12 @@ export function removeEmptyParams(obj: Record<string, unknown>) {
         } else if (obj[key] !== undefined) newObj[key] = obj[key];
     });
     return newObj;
+}
+
+export function getDateTimeType() {
+    // We're using an ancient version of mariadb which doesn't support CURRENT_TIMESTAMP on
+    if (Config.getOrThrow('database.type', 'string') === 'mariadb') {
+        return 'timestamp';
+    }
+    return 'datetime';
 }
