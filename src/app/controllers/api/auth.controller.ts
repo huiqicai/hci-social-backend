@@ -1,6 +1,6 @@
 import {
-  ApiDefineTag, ApiUseTag, Context, createSession, dependency, hashPassword, HttpResponseOK,
-  HttpResponseUnauthorized, Post, Store, UseSessions, ValidateBody, verifyPassword
+  ApiDefineTag, ApiResponse, ApiUseTag, Context, createSession, dependency, hashPassword, HttpResponseOK,
+  HttpResponseUnauthorized, Post, Store, UserRequired, UseSessions, ValidateBody, verifyPassword
 } from '@foal/core';
 
 import { User } from '../../entities';
@@ -93,6 +93,14 @@ export class AuthController {
       await ctx.session.destroy();
     }
 
+    return new HttpResponseOK();
+  }
+
+  @Post('/verify')
+  @ApiResponse(200, { description: "API token is valid" })
+  @ApiResponse(401, { description: "API token is missing or invalid" })
+  @UserRequired()
+  async verify() {
     return new HttpResponseOK();
   }
 }
