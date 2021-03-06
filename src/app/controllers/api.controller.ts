@@ -1,4 +1,4 @@
-import { ApiDefineSecurityScheme, ApiInfo, ApiSecurityRequirement, ApiServer, Context, controller, Hook, HttpResponseNoContent, Options, UseSessions } from '@foal/core';
+import { ApiDefineSecurityScheme, ApiInfo, ApiSecurityRequirement, ApiServer, Config, Context, controller, Hook, HttpResponseNoContent, Options, UseSessions } from '@foal/core';
 import { fetchUser } from '@foal/typeorm';
 import { User } from '../entities';
 
@@ -6,12 +6,14 @@ import { ConnectionController, GroupController, GroupMemberController, MessageCo
 import { AuthController } from './api/auth.controller';
 import { UserController } from './api/user.controller';
 
+const prefix = Config.get('api_prefix', 'string', '');
+
 @ApiInfo({
   title: 'HCI-Social API',
   version: '1.0.0'
 })
 @ApiServer({
-  url: '/api'
+  url: `${prefix}/api`
 })
 @ApiSecurityRequirement({ bearerAuth: [] })
 @ApiDefineSecurityScheme('bearerAuth', {
