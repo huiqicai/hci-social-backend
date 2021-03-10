@@ -11,7 +11,7 @@ const credentialsSchema = {
     email: { type: 'string', format: 'email' },
     password: { type: 'string' }
   },
-  required: [ 'email', 'password' ],
+  required: ['email', 'password'],
   type: 'object',
 };
 
@@ -22,7 +22,6 @@ const credentialsSchema = {
     'set the `Authorization` HTTP header with the value `Bearer <token>`'
 })
 @ApiUseTag('Authentication')
-@UseSessions()
 export class AuthController {
   @dependency
   store: Store;
@@ -37,7 +36,7 @@ export class AuthController {
     user.username = '';
     user.firstName = '';
     user.lastName = '';
-    user.status= '';
+    user.status = '';
     user.role = '';
     await user.save();
 
