@@ -1,7 +1,11 @@
 import {
-  ApiDefineTag, ApiResponse, ApiUseTag, Context, createSession, dependency, hashPassword, HttpResponseOK,
+  ApiDefineTag, ApiOperationDescription, ApiOperationSummary, ApiResponse, ApiUseTag, Context, createSession, dependency, hashPassword, Hook, HttpResponseNotFound, HttpResponseOK,
   HttpResponseUnauthorized, Post, Store, UserRequired, UseSessions, ValidateBody, verifyPassword
 } from '@foal/core';
+import { randomBytes } from 'crypto';
+import { sign, verify } from "jsonwebtoken";
+import * as nodemailer from 'nodemailer';
+import { getRepository } from 'typeorm';
 
 import { User } from '../../entities';
 
@@ -14,6 +18,20 @@ const credentialsSchema = {
   required: ['email', 'password'],
   type: 'object',
 };
+
+const otpSecret = randomBytes(32).toString('base64');
+
+class InvalidTokenResponse extends HttpResponseUnauthorized {
+
+  constructor(description: string) {
+    super({ code: 'invalid_token', description });
+    this.setHeader(
+      'WWW-Authenticate',
+      `error="invalid_token", error_description="${description}"`
+    );
+  }
+
+}
 
 @ApiDefineTag({
   name: 'Authentication',
@@ -96,10 +114,74 @@ export class AuthController {
   }
 
   @Post('/verify')
+  @ApiOperationSummary("")
   @ApiResponse(200, { description: "API token is valid" })
   @ApiResponse(401, { description: "API token is missing or invalid" })
   @UserRequired()
   async verify() {
+    return new HttpResponseOK();
+  }
+
+  @Post('/request-reset')
+  @ApiOperationSummary("Send an email to a user with a password reset token if such a user exists")
+  @ValidateBody({
+    properties: {
+      email: { type: 'string', format: 'email' },
+    },
+    required: ['email'],
+    type: 'object',
+  })
+  async requestOTP(ctx: Context) {
+    const email = ctx.request.body.email;
+
+    const user = await getRepository(User).findOne({ email });
+    // Don't give away any extra information
+    if (!user) return new HttpResponseOK();
+
+    const token = sign(
+      { sub: user.id, id: user.id, email },
+      otpSecret,
+      { expiresIn: '1h' }
+    );
+    if (process.env.NODE_ENV === 'production') {
+      nodemailer.createTransport({sendmail: true}).sendMail({
+        to: ctx.request.query.email,
+        subject: 'Password Reset',
+        text: `Your password reset token is ${token}. It will expire in one hour. Please return to the application to continue resetting your password.`
+      });
+    } else {
+      console.log(`Password reset triggered for ${email}. Token: ${token}`);
+    }
+    return new HttpResponseOK();
+  }
+
+  @Post('/reset-password')
+  @ApiOperationSummary("Reset a user's password using a password reset token")
+  @ValidateBody({
+    properties: {
+      token: { type: 'string' },
+      password: { type: 'string' },
+    },
+    required: ['token', 'password'],
+    type: 'object',
+  })
+  async resetPassword(ctx: Context) {
+    let payload: Record<string, string>;
+    try {
+      payload = await new Promise((resolve, reject) => {
+        verify(ctx.request.body.token, otpSecret, {}, (err: any, value: object | undefined) => {
+          if (err || !value) { reject(err || 'Invalid Token'); } else { resolve(value as Record<string, string>); }
+        });
+      });
+    } catch (error) {
+      return new InvalidTokenResponse(error.message);
+    }
+
+    const user = await getRepository(User).findOne({ id: +payload.sub });
+    if (!user) return new InvalidTokenResponse('Invalid user');
+    user.password = ctx.request.body.password;
+    user.save();
+
     return new HttpResponseOK();
   }
 }

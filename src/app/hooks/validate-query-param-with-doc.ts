@@ -6,7 +6,7 @@ export function ValidateQueryParamWithDoc(name: string, schema: object, {
 }: {
     required?: boolean,
     description?: string
-}): HookDecorator {
+} = {}): HookDecorator {
   return MergeHooks(
     ValidateQueryParam(name, schema, { openapi: false, required }),
     ApiParameter({ in: 'query', name, schema, description, required })

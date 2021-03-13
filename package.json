@@ -27,14 +27,18 @@
     "@foal/core": "^2.1.2",
     "@foal/swagger": "^2.1.2",
     "@foal/typeorm": "^2.1.2",
+    "jsonwebtoken": "^8.5.1",
     "mysql": "^2.18.1",
+    "nodemailer": "^6.5.0",
     "source-map-support": "~0.5.19",
     "sqlite3": "~5.0.1",
     "typeorm": "^0.2.30"
   },
   "devDependencies": {
+    "@types/jsonwebtoken": "^8.5.0",
     "@types/mocha": "8.2.0",
     "@types/node": "14.14.25",
+    "@types/nodemailer": "^6.4.1",
     "@typescript-eslint/eslint-plugin": "~4.14.2",
     "@typescript-eslint/parser": "~4.14.2",
     "concurrently": "~5.3.0",
