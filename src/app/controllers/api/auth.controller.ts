@@ -8,6 +8,7 @@ import * as nodemailer from 'nodemailer';
 import { getRepository } from 'typeorm';
 
 import { User } from '../../entities';
+import { Mail } from '../../services';
 
 const credentialsSchema = {
   additionalProperties: false,
@@ -43,6 +44,9 @@ class InvalidTokenResponse extends HttpResponseUnauthorized {
 export class AuthController {
   @dependency
   store: Store;
+
+  @dependency
+  mail: Mail
 
   @Post('/signup')
   @ValidateBody(credentialsSchema)
@@ -143,15 +147,13 @@ export class AuthController {
       otpSecret,
       { expiresIn: '1h' }
     );
-    if (process.env.NODE_ENV === 'production') {
-      nodemailer.createTransport({sendmail: true}).sendMail({
-        to: ctx.request.query.email,
-        subject: 'Password Reset',
-        text: `Your password reset token is ${token}. It will expire in one hour. Please return to the application to continue resetting your password.`
-      });
-    } else {
-      console.log(`Password reset triggered for ${email}. Token: ${token}`);
-    }
+
+    this.mail.send(
+      email,
+      'Password Reset',
+      `Your password reset token is ${token}. It will expire in one hour. Please return to the application to continue resetting your password.`
+    );
+
     return new HttpResponseOK();
   }
 
