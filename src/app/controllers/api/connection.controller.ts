@@ -150,8 +150,7 @@ export class ConnectionController {
   @ValidateBody(connectionSchema)
   async replaceConnection(ctx: Context<User>) {
     const connection = await getRepository(Connection).findOne({
-      id: ctx.request.params.connectionId,
-      user: ctx.user
+      id: ctx.request.params.connectionId
     });
 
     if (!connection) {
@@ -174,8 +173,7 @@ export class ConnectionController {
   @ValidatePathParam('connectionId', { type: 'number' })
   async deleteConnection(ctx: Context<User>) {
     const connection = await getRepository(Connection).findOne({
-      id: ctx.request.params.connectionId,
-      user: ctx.user
+      id: ctx.request.params.connectionId
     });
 
     if (!connection) {

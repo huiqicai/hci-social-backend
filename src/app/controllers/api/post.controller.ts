@@ -237,8 +237,6 @@ export class PostController {
       return new HttpResponseNotFound();
     }
 
-    const parent = post.parent;
-
     await getRepository(Post).delete(ctx.request.params.postId);
 
     return new HttpResponseNoContent();
