@@ -4,7 +4,6 @@ import {
 } from '@foal/core';
 import { randomBytes } from 'crypto';
 import { sign, verify } from "jsonwebtoken";
-import * as nodemailer from 'nodemailer';
 import { getRepository } from 'typeorm';
 
 import { User } from '../../entities';
@@ -118,7 +117,7 @@ export class AuthController {
   }
 
   @Post('/verify')
-  @ApiOperationSummary("")
+  @ApiOperationSummary("Check if the provided session token is valid")
   @ApiResponse(200, { description: "API token is valid" })
   @ApiResponse(401, { description: "API token is missing or invalid" })
   @UserRequired()
