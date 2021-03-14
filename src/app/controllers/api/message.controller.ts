@@ -8,27 +8,36 @@ import {
 import { getRepository } from 'typeorm';
 
 import { Message, User } from '../../entities';
-import { ValidateQuery } from '../../hooks';
+import { ValidateQueryParamWithDoc } from '../../hooks/validate-query-param-with-doc';
 import { removeEmptyParams } from '../../utils';
 
+function genSchema(properties: object = {}, required: string[] = []) {
+  return {
+    // This doesn't play nicely with oneOf for some reason - it removes any properties that
+    // aren't defined on all options. We already scrub things with getMessageParams anyways
+    // though so this shouldn't be an issue
+    //additionalProperties: false,
+    properties: {
+      authorID: { type: 'number' },
+      content: { type: 'string' },
+      ...properties
+    },
+    required: [ 'authorID', 'content', ...required ],
+    type: 'object',
+  };
+}
+
 const messageSchema = {
-  additionalProperties: false,
-  properties: {
-    authorID: { type: 'number' },
-    content: { type: 'string' },
-  },
   oneOf: [
-    {
-      properties: { recipientUserID: { type: 'number' } },
-      required: [ 'recipientUserID' ]
-    },
-    {
-      properties: { recipientGroupID: { type: 'number' } },
-      required: [ 'recipientGroupID' ]
-    },
-  ],
-  required: [ 'authorID', 'content' ],
-  type: 'object',
+    genSchema(
+      { recipientUserID: { type: 'number' } },
+      ['recipientUserID']
+    ),
+    genSchema(
+      { recipientGroupID: { type: 'number' } },
+      ['recipientGroupID']
+    ),
+  ]
 };
 
 function getMessageParams(params: any, undefinedMode: 'remove' | 'default') {
@@ -69,7 +78,11 @@ export class MessageController {
   @ApiResponse(200, { description: 'Returns a list of messages.' })
   @ValidateQueryParam('skip', { type: 'number' }, { required: false })
   @ValidateQueryParam('take', { type: 'number' }, { required: false })
-  @ValidateQuery({...messageSchema, required: []})
+  // Because of the complexity of our oneOf schema requirements, we'll add each field manually
+  @ValidateQueryParamWithDoc("authorID", { type: 'number' }, { required: false })
+  @ValidateQueryParamWithDoc("content", { type: 'string' }, { required: false })
+  @ValidateQueryParamWithDoc("recipientUserID", { type: 'number' }, { required: false })
+  @ValidateQueryParamWithDoc("recipientGroupID", { type: 'number' }, { required: false })
   async findMessages(ctx: Context<User>) {
     const messages = await getRepository(Message).findAndCount({
       skip: ctx.request.query.skip,

@@ -1,4 +1,4 @@
-import { HookDecorator, MergeHooks, ValidateQueryParam } from '@foal/core';
+import { HookDecorator, MergeHooks } from '@foal/core';
 import { ValidateQueryParamWithDoc } from './validate-query-param-with-doc';
 
 export function ValidateQuery(schema: Record<string, any>): HookDecorator {
