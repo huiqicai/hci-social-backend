@@ -1,5 +1,6 @@
 import { Config, controller, IAppController } from '@foal/core';
 import { createConnection } from 'typeorm';
+import { fkFixedSync } from '../utils';
 
 import { ApiController } from './api.controller';
 import { OpenApiController } from './openapi.controller';
@@ -12,6 +13,9 @@ export class AppController implements IAppController {
   ];
 
   async init() {
-    await createConnection();
+    const conn = await createConnection();
+    if (Config.get('database.synchronize', 'boolean', false)) {
+      await fkFixedSync(conn);
+    }
   }
 }

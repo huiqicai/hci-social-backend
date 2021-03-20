@@ -1,4 +1,5 @@
 import { Config } from "@foal/core";
+import { Connection } from "typeorm";
 
 export function removeEmptyParams(obj: Record<string, unknown>) {
     let newObj = {};
@@ -17,4 +18,12 @@ export function getDateTimeType() {
         return 'timestamp';
     }
     return 'datetime';
+}
+
+export async function fkFixedSync(conn: Connection) {
+    // Derived from https://github.com/typeorm/typeorm/issues/2576#issuecomment-499506647
+    const isSQLite = Config.getOrThrow('database.type', 'string') === 'sqlite';
+    if (isSQLite) await conn.query('PRAGMA foreign_keys=OFF');
+    await conn.synchronize();
+    if (isSQLite) await conn.query('PRAGMA foreign_keys=ON');
 }
