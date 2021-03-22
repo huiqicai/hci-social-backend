@@ -1,7 +1,7 @@
 import { Config } from "@foal/core";
 import { Connection } from "typeorm";
 
-export function removeEmptyParams(obj: Record<string, unknown>) {
+export function removeEmptyParams<T extends Record<string, unknown>>(obj: T): Partial<T> {
     let newObj = {};
     Object.keys(obj).forEach((key) => {
         if (obj[key] === Object(obj[key])) {

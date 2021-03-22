@@ -7,7 +7,7 @@
   "scripts": {
     "build": "shx rm -rf build && tsc -p tsconfig.app.json",
     "start": "cross-env NODE_ENV=production node ./build/index.js",
-    "develop": "npm run build && concurrently \"tsc -p tsconfig.app.json -w\" \"cross-env NODE_ENV=development supervisor -w ./build --no-restart-on error ./build/index.js\"",
+    "develop": "shx mkdir -p public/uploads/user-artifacts && npm run build && concurrently \"tsc -p tsconfig.app.json -w\" \"cross-env NODE_ENV=development supervisor -w ./build --no-restart-on error ./build/index.js\"",
     "build:test": "shx rm -rf build && tsc -p tsconfig.test.json",
     "start:test": "cross-env NODE_ENV=test mocha --file ./build/test.js \"./build/**/*.spec.js\"",
     "test": "npm run build:test && concurrently \"tsc -p tsconfig.test.json -w\" \"cross-env NODE_ENV=test mocha --file ./build/test.js -w \\\"./build/**/*.spec.js\\\"\"",
@@ -24,31 +24,32 @@
     "node": ">=10"
   },
   "dependencies": {
-    "@foal/core": "^2.1.2",
-    "@foal/swagger": "^2.1.2",
-    "@foal/typeorm": "^2.1.2",
+    "@foal/core": "^2.2.0",
+    "@foal/storage": "^2.2.0",
+    "@foal/swagger": "^2.2.0",
+    "@foal/typeorm": "^2.2.0",
     "jsonwebtoken": "^8.5.1",
     "mysql": "^2.18.1",
     "nodemailer": "^6.5.0",
     "source-map-support": "~0.5.19",
-    "sqlite3": "~5.0.1",
-    "typeorm": "^0.2.30"
+    "sqlite3": "~5.0.2",
+    "typeorm": "^0.2.31"
   },
   "devDependencies": {
-    "@types/jsonwebtoken": "^8.5.0",
-    "@types/mocha": "8.2.0",
-    "@types/node": "14.14.25",
+    "@types/jsonwebtoken": "^8.5.1",
+    "@types/mocha": "8.2.2",
+    "@types/node": "14.14.35",
     "@types/nodemailer": "^6.4.1",
-    "@typescript-eslint/eslint-plugin": "~4.14.2",
-    "@typescript-eslint/parser": "~4.14.2",
-    "concurrently": "~5.3.0",
+    "@typescript-eslint/eslint-plugin": "~4.18.0",
+    "@typescript-eslint/parser": "~4.18.0",
+    "concurrently": "~6.0.0",
     "cross-env": "^7.0.3",
-    "eslint": "^7.19.0",
-    "mocha": "~8.2.1",
+    "eslint": "^7.22.0",
+    "mocha": "~8.3.2",
     "shx": "^0.3.3",
     "supertest": "~6.1.3",
     "supervisor": "~0.12.0",
-    "typescript": "~4.1.3"
+    "typescript": "~4.2.3"
   },
   "optionalDependencies": {
     "node-fastcgi": "^1.3.3"

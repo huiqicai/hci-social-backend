@@ -1,15 +1,27 @@
 import {
   ApiDefineTag,
   ApiOperationDescription, ApiOperationId, ApiOperationSummary, ApiResponse,
-  ApiUseTag, Context, Delete, Get, HttpResponseCreated,
+  ApiUseTag, Config, Context, Delete, dependency, Get, HttpResponseBadRequest, HttpResponseCreated,
   HttpResponseNoContent, HttpResponseNotFound, HttpResponseOK, Patch, Post,
   Put, UserRequired, ValidateBody, ValidatePathParam, ValidateQueryParam
 } from '@foal/core';
+import { Disk, File as FoalFile, ValidateMultipartFormDataBody } from '@foal/storage';
 import { getRepository } from 'typeorm';
 
 import { UserArtifact, User } from '../../entities';
 import { ValidateQuery } from '../../hooks';
 import { removeEmptyParams } from '../../utils';
+
+const extensions = [
+  // Images
+  'png', 'jpg', 'jpeg', 'gif', 'webp', 'svg',
+  // Audio
+  'wav', 'mp3', 'wma', 'mov',
+  // Video
+  'mp4', 'avi', 'wmv',
+  // Audio/video
+  'webm'
+];
 
 const userArtifactSchema = {
   additionalProperties: false,
@@ -58,6 +70,18 @@ function getUserArtifactParams(params: any, undefinedMode: 'remove' | 'default')
 })
 @ApiUseTag('User Artifact')
 export class UserArtifactController {
+  @dependency
+  disk: Disk
+
+  async deleteUAFile(userArtifact: UserArtifact) {
+    const oldPathMatch = userArtifact.url.match(/\/uploads\/(.*)$/);
+    if (userArtifact.size > 0 && oldPathMatch) {
+      await this.disk.delete(oldPathMatch[1]);
+      userArtifact.size = 0;
+      userArtifact.url = '';
+      await getRepository(UserArtifact).save(userArtifact);
+    }
+  }
 
   @Get()
   @ApiOperationId('findUserArtifacts')
@@ -101,6 +125,7 @@ export class UserArtifactController {
   @Post()
   @ApiOperationId('createUserArtifact')
   @ApiOperationSummary('Create a new user artifact.')
+  @ApiResponse(404, { description: 'User artifact not found.' })
   @ApiResponse(400, { description: 'Invalid user artifact.' })
   @ApiResponse(201, { description: 'User artifact successfully created. Returns the user artifact.' })
   @UserRequired()
@@ -110,6 +135,84 @@ export class UserArtifactController {
       getUserArtifactParams(ctx.request.body, 'default')
     );
     return new HttpResponseCreated(userArtifact);
+  }
+
+  @Post('/:userArtifactId/upload')
+  @ApiOperationId('uploadFile')
+  @ApiOperationSummary('Upload a file as the contents of a user artifact.')
+  @ApiOperationDescription(
+    'Upload a file as the contents of a user artifact. This will override the URL property, and if a future ' +
+    'PUT or PATCH changes the URL, the file will be removed. There is a limit of 10MB per file, and a total of 100MB ' +
+    'of uploads. Additionally, for security reasons only the following file types are supported: ' +
+    extensions.join(', ')
+  )
+  @ApiResponse(400, { description: 'Invalid file.' })
+  @ApiResponse(201, { description: 'File successfully attached to the user artifact. Returns modified user artifact' })
+  @UserRequired()
+  @ValidateMultipartFormDataBody({
+    files: {
+      file: { required: true }
+    }
+  })
+  @ValidatePathParam('userArtifactId', { type: 'number' })
+  async uploadFile(ctx: Context) {
+    const userArtifact = await getRepository(UserArtifact).findOne({
+      id: ctx.request.params.userArtifactId
+    });
+
+    if (!userArtifact) {
+      return new HttpResponseNotFound();
+    }
+
+    const file = ctx.request.body.files.file as FoalFile;
+    const fileSize = file.buffer.byteLength;
+
+    const { sum } = await getRepository(UserArtifact)
+      .createQueryBuilder()
+      .addSelect('SUM(ua_size)', 'sum')
+      .getRawOne();
+
+    // Max total upload size: 100MB
+    if (sum + fileSize > 1024*1024*100) {
+      return new HttpResponseBadRequest({
+        headers: {
+          error: 'FILE_STORAGE_EXCEEDED',
+          message: 'Application file storage exceeded'
+        }
+      });
+    }
+
+    const invalidExt = new HttpResponseBadRequest({
+      headers: {
+        error: 'FILE_INVALID_EXTENSION',
+        message: 'Invalid file extension'
+      }
+    });
+
+    if (!file.filename) {
+      return invalidExt;
+    }
+
+    const fileExt = file.filename.match(/\.(\w+)/);
+
+    if (!fileExt || !extensions.includes(fileExt[1])) {
+      return invalidExt;
+    }
+
+    await this.deleteUAFile(userArtifact);
+
+    const prefix = Config.get('api_prefix', 'string', '');
+    const { path } = await this.disk.write('user-artifacts', file.buffer, {
+      extension: fileExt[1]
+    });
+
+    const fullPath = `${prefix}/uploads/${path}`;
+
+    userArtifact.url = fullPath;
+    userArtifact.size = fileSize;
+    await getRepository(UserArtifact).save(userArtifact);
+
+    return new HttpResponseOK(userArtifact);
   }
 
   @Patch('/:userArtifactId')
@@ -130,7 +233,13 @@ export class UserArtifactController {
       return new HttpResponseNotFound();
     }
 
-    Object.assign(userArtifact, getUserArtifactParams(ctx.request.body, 'remove'));
+    const params = getUserArtifactParams(ctx.request.body, 'remove');
+
+    if (params.url !== undefined) {
+      await this.deleteUAFile(userArtifact);
+    }
+
+    Object.assign(userArtifact, params);
 
     await getRepository(UserArtifact).save(userArtifact);
 
@@ -155,6 +264,8 @@ export class UserArtifactController {
       return new HttpResponseNotFound();
     }
 
+    await this.deleteUAFile(userArtifact);
+
     Object.assign(userArtifact, getUserArtifactParams(ctx.request.body, 'default'));
 
     await getRepository(UserArtifact).save(userArtifact);
@@ -177,6 +288,8 @@ export class UserArtifactController {
     if (!userArtifact) {
       return new HttpResponseNotFound();
     }
+
+    await this.deleteUAFile(userArtifact);
 
     await getRepository(UserArtifact).delete(ctx.request.params.userArtifactId);
 

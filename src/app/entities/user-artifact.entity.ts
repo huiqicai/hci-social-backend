@@ -21,4 +21,7 @@ export class UserArtifact extends BaseEntity {
   @Column({ name: 'ua_category' })
   category: string;
 
+  @Column({ name: 'ua_size', default: 0 })
+  size: number;
+
 }

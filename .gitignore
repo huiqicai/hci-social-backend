@@ -31,3 +31,4 @@ build
 
 # Data
 *.sqlite3
+public/uploads/
