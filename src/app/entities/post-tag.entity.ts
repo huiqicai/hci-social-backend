@@ -9,7 +9,7 @@ export class PostTag extends BaseEntity {
   @PrimaryGeneratedColumn({ name: 'pt_id' })
   id: number;
 
-  @ManyToOne(() => Post, { nullable: false })
+  @ManyToOne(() => Post, { nullable: false, onDelete: 'CASCADE' })
   @JoinColumn({ name: 'pt_post_id' })
   post: Post;
 
