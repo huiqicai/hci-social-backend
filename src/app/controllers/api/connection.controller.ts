@@ -88,9 +88,7 @@ export class ConnectionController {
   async findConnectionById(ctx: Context<User>) {
     const connection = await getRepository(Connection).findOne({
       relations: ['user', 'connectedUser'],
-      where: {
-        id: ctx.request.params.connectionId
-      }
+      where: { id: ctx.request.params.connectionId }
     });
 
     if (!connection) {

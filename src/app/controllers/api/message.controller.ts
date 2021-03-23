@@ -85,6 +85,7 @@ export class MessageController {
   @ValidateQueryParamWithDoc("recipientGroupID", { type: 'number' }, { required: false })
   async findMessages(ctx: Context<User>) {
     const messages = await getRepository(Message).findAndCount({
+      relations: ['author', 'recipientUser', 'recipientGroup'],
       skip: ctx.request.query.skip,
       take: ctx.request.query.take,
       where: getMessageParams(ctx.request.query, 'remove')
@@ -100,7 +101,8 @@ export class MessageController {
   @ValidatePathParam('messageId', { type: 'number' })
   async findMessageById(ctx: Context<User>) {
     const message = await getRepository(Message).findOne({
-      id: ctx.request.params.messageId
+      relations: ['author', 'recipientUser', 'recipientGroup'],
+      where: { id: ctx.request.params.messageId }
     });
 
     if (!message) {

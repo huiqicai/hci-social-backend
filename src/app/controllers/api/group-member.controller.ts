@@ -64,6 +64,7 @@ export class GroupMemberController {
   @ValidateQuery({...groupMemberSchema, required: []})
   async findGroupMembers(ctx: Context<User>) {
     const groupMembers = await getRepository(GroupMember).findAndCount({
+      relations: ['user', 'group'],
       skip: ctx.request.query.skip,
       take: ctx.request.query.take,
       where: getGroupMemberParams(ctx.request.query, 'remove')
@@ -79,7 +80,8 @@ export class GroupMemberController {
   @ValidatePathParam('groupMemberId', { type: 'number' })
   async findGroupMemberById(ctx: Context<User>) {
     const groupMember = await getRepository(GroupMember).findOne({
-      id: ctx.request.params.groupMemberId
+      relations: ['user', 'group'],
+      where: { id: ctx.request.params.groupMemberId }
     });
 
     if (!groupMember) {

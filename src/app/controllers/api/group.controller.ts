@@ -69,6 +69,7 @@ export class GroupController {
   @ValidateQuery({...groupSchema, required: []})
   async findGroups(ctx: Context<User>) {
     const groups = await getRepository(Group).findAndCount({
+      relations: ['owner'],
       skip: ctx.request.query.skip,
       take: ctx.request.query.take,
       where: getGroupParams(ctx.request.query, 'remove')
@@ -84,7 +85,8 @@ export class GroupController {
   @ValidatePathParam('groupId', { type: 'number' })
   async findGroupById(ctx: Context<User>) {
     const group = await getRepository(Group).findOne({
-      id: ctx.request.params.groupId
+      relations: ['owner'],
+      where: { id: ctx.request.params.groupId }
     });
 
     if (!group) {

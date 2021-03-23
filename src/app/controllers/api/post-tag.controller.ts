@@ -74,6 +74,7 @@ export class PostTagController {
   @ValidateQuery({...postTagSchema, required: []})
   async findPostTags(ctx: Context<User>) {
     const postTags = await getRepository(PostTag).findAndCount({
+      relations: ['post', 'user'],
       skip: ctx.request.query.skip,
       take: ctx.request.query.take,
       where: getPostTagParams(ctx.request.query, 'remove')
@@ -89,7 +90,8 @@ export class PostTagController {
   @ValidatePathParam('postTagId', { type: 'number' })
   async findPostTagById(ctx: Context<User>) {
     const postTag = await getRepository(PostTag).findOne({
-      id: ctx.request.params.postTagId
+      relations: ['post', 'user'],
+      where: { id: ctx.request.params.postTagId }
     });
 
     if (!postTag) {
