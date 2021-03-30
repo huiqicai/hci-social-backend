@@ -15,7 +15,8 @@
     },
     "multipartRequests": {
       "fileSizeLimit": 10485760
-    }
+    },
+    "staticPathPrefix": "env(API_PREFIX)"
   },
   "database": {
     "type": "sqlite",
