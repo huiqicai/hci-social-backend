@@ -9,11 +9,11 @@ export class GroupMember extends BaseEntity {
   @PrimaryGeneratedColumn({ name: 'gm_id' })
   id: number;
 
-  @ManyToOne(() => User, { nullable: false })
+  @ManyToOne(() => User, { nullable: false, onDelete: 'CASCADE' })
   @JoinColumn({ name: 'gm_user_id' })
   user: User;
 
-  @ManyToOne(() => Group, { nullable: false })
+  @ManyToOne(() => Group, { nullable: false, onDelete: 'CASCADE' })
   @JoinColumn({ name: 'gm_group_id' })
   group: Group;
 

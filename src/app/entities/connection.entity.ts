@@ -8,11 +8,11 @@ export class Connection extends BaseEntity {
   @PrimaryGeneratedColumn({ name: 'conn_id' })
   id: number;
 
-  @ManyToOne(() => User, {nullable: false })
+  @ManyToOne(() => User, {nullable: false, onDelete: 'CASCADE' })
   @JoinColumn({ name: 'conn_user_id' })
   user: User;
 
-  @ManyToOne(() => User, { nullable: false })
+  @ManyToOne(() => User, { nullable: false, onDelete: 'CASCADE' })
   @JoinColumn({ name: 'connected_user_id' })
   connectedUser: User;
 

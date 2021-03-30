@@ -13,7 +13,7 @@ export class PostTag extends BaseEntity {
   @JoinColumn({ name: 'pt_post_id' })
   post: Post;
 
-  @ManyToOne(() => User)
+  @ManyToOne(() => User, { onDelete: 'CASCADE' })
   @JoinColumn({ name: 'pt_user_id' })
   user: User;
 

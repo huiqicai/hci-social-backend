@@ -8,7 +8,7 @@ export class UserPreference extends BaseEntity {
   @PrimaryGeneratedColumn({ name: 'up_id'})
   id: number;
 
-  @ManyToOne(() => User, { nullable: false })
+  @ManyToOne(() => User, { nullable: false, onDelete: 'CASCADE' })
   @JoinColumn({ name: 'up_user_id' })
   user: User;
 

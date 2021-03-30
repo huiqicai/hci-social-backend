@@ -8,7 +8,7 @@ export class Group extends BaseEntity {
   @PrimaryGeneratedColumn({ name: 'group_id' })
   id: number;
 
-  @ManyToOne(() => User)
+  @ManyToOne(() => User, { onDelete: 'SET NULL' })
   @JoinColumn({ name: 'group_owner_id' })
   owner: User;
 

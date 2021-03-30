@@ -1,13 +1,13 @@
 import {
   ApiDefineTag,
   ApiOperationDescription, ApiOperationId, ApiOperationSummary, ApiResponse,
-  ApiUseTag, Context, Delete, Get, HttpResponseCreated,
+  ApiUseTag, Context, Delete, Get, HttpResponseBadRequest, HttpResponseCreated,
   HttpResponseNoContent, HttpResponseNotFound, HttpResponseOK, Patch, Post,
   Put, UserRequired, ValidateBody, ValidatePathParam, ValidateQueryParam
 } from '@foal/core';
 import { getRepository } from 'typeorm';
 
-import { User } from '../../entities';
+import { User, UserArtifact } from '../../entities';
 import { ValidateQuery } from '../../hooks';
 import { removeEmptyParams } from '../../utils';
 
@@ -161,6 +161,7 @@ export class UserController {
   @ApiOperationId('deleteUser')
   @ApiOperationSummary('Delete a user.')
   @ApiResponse(404, { description: 'User not found.' })
+  @ApiResponse(400, { description: 'Unable to delete (eg, user artifacts needing deletion).' })
   @ApiResponse(204, { description: 'User successfully deleted.' })
   @UserRequired()
   @ValidatePathParam('userId', { type: 'number' })
@@ -171,6 +172,12 @@ export class UserController {
 
     if (!user) {
       return new HttpResponseNotFound();
+    }
+
+    const artifacts = await getRepository(UserArtifact).count({ owner: user });
+
+    if (artifacts > 0) {
+      return new HttpResponseBadRequest("This user has user artifacts that must be deleted first.");
     }
 
     await getRepository(User).delete(ctx.request.params.userId);
