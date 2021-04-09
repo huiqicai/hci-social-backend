@@ -173,7 +173,7 @@ export class UserArtifactController {
       .getRawOne();
 
     // Max total upload size: 100MB
-    if (sum + fileSize > 1024*1024*100) {
+    if (parseInt(sum) + fileSize > 1024*1024*100) {
       return new HttpResponseBadRequest({
         headers: {
           error: 'FILE_STORAGE_EXCEEDED',
