@@ -54,7 +54,7 @@ export async function main(/*args*/) {
       await getManager().save(user)
     );
   } catch (error) {
-    console.log(error.message);
+    console.log((error as Error).message);
   } finally {
     await getConnection().close();
   }

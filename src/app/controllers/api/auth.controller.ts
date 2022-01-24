@@ -3,7 +3,7 @@ import {
   HttpResponseUnauthorized, Post, Store, UserRequired, UseSessions, ValidateBody, verifyPassword
 } from '@foal/core';
 import { randomBytes } from 'crypto';
-import { sign, verify } from "jsonwebtoken";
+import { JwtPayload, sign, verify, VerifyErrors } from "jsonwebtoken";
 import { getRepository } from 'typeorm';
 
 import { User } from '../../entities';
@@ -167,21 +167,22 @@ export class AuthController {
     type: 'object',
   })
   async resetPassword(ctx: Context) {
-    let payload: Record<string, string>;
-    try {
-      payload = await new Promise((resolve, reject) => {
-        verify(ctx.request.body.token, otpSecret, {}, (err: any, value: object | undefined) => {
-          if (err || !value) { reject(err || 'Invalid Token'); } else { resolve(value as Record<string, string>); }
-        });
+    const payload: JwtPayload = await new Promise((resolve, reject) => {
+      verify(ctx.request.body.token, otpSecret, {}, (err: VerifyErrors | null, value: JwtPayload | string | undefined) => {
+        if (err || !value || typeof(value) === 'string') {
+          reject(new InvalidTokenResponse(err?.message ?? 'Invalid Token'));
+        } else {
+          resolve(value);
+        }
       });
-    } catch (error) {
-      return new InvalidTokenResponse(error.message);
-    }
+    });
+
+    if (!payload.sub) return new InvalidTokenResponse('Invalid user');
 
     const user = await getRepository(User).findOne({ id: +payload.sub });
     if (!user) return new InvalidTokenResponse('Invalid user');
     user.password = ctx.request.body.password;
-    user.save();
+    await user.save();
 
     return new HttpResponseOK();
   }
