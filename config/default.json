@@ -20,5 +20,6 @@
   },
   "api_prefix": "env(API_PREFIX)",
   "listen_socket": "env(LISTEN_SOCKET)",
-  "listen_port": "env(LISTEN_PORT)"
+  "listen_port": "env(LISTEN_PORT)",
+  "database_url": "env(DATABASE_URL)"
 }
