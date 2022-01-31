@@ -1,17 +1,24 @@
 import {
   ApiDefineTag,
   ApiOperationDescription, ApiOperationId, ApiOperationSummary, ApiResponse,
-  ApiUseTag, Context, Delete, Get, HttpResponseCreated,
+  ApiUseTag, Context, Delete, dependency, Get, HttpResponseCreated,
   HttpResponseNoContent, HttpResponseNotFound, HttpResponseOK, Patch, Post as HTTPPost,
-  Put, UserRequired, ValidateBody, ValidatePathParam, ValidateQueryParam
+  UserRequired, ValidateBody, ValidatePathParam
 } from '@foal/core';
-import { getRepository } from 'typeorm';
+import { Prisma } from '@prisma/client';
+import { PrismaClientKnownRequestError } from '@prisma/client/runtime';
+import { ParseAttributes, ValidateQuery } from '../../hooks';
+import { JTDDataType } from '../../jtd';
+import { Prisma as PrismaService } from '../../services';
+import { apiAttributesToPrisma, attributeSchema, userSelectFields } from '../../utils';
 
-import { Post, User } from '../../entities';
-import { ValidateQuery } from '../../hooks';
-import { removeEmptyParams } from '../../utils';
+enum Sort {
+  OLDEST = 'oldest',
+  NEWEST = 'newest'
+}
 
-const postSchema = {
+const basePostSchema = {
+  type: 'object',
   additionalProperties: false,
   properties: {
     authorID: { type: 'number' },
@@ -20,52 +27,51 @@ const postSchema = {
       oneOf: [{ type: 'number' }, { type: 'null' }]
     },
     content: { type: 'string' },
-    type: {
-      type: 'string',
-      description: 'Implementation specific field to define types of posts; this could be "post", ' +
-        '"comment", "blog", "essay", ' +
-        'etc. - whatever makes sense for your platform.'
+    recipientUserID: {
+      description: 'If this post is intended to go to a specific user (eg, as a direct message), the id of the user it is directed to.',
+      oneOf: [{ type: 'number' }, { type: 'null' }]
     },
-    thumbnailURL: {
-      type: 'string',
-      description: 'If you have thumbnail images, this is the URL to the thumbnail for this post.'
+    recipientGroupID: {
+      description: 'If this post is intended to go to a specific group (eg, as a group message), the id of the group it is directed to.',
+      oneOf: [{ type: 'number' }, { type: 'null' }]
     },
+    attributes: { type: 'object', additionalProperties: true }
   },
-  required: [ 'authorID' ],
-  type: 'object',
-}
+  required: []
+} as const;
 
-function getPostParams(params: any, undefinedMode: 'remove' | 'default') {
-  const resetDefaults = undefinedMode === 'default';
-
-  const res = {
-    author: {
-      id: params.authorID
-    },
-    parent: {
-      id: resetDefaults ? params.parentID ?? null : params.parentID
-    },
-    type: resetDefaults ? params.type ?? '' : params.type,
-    content: resetDefaults ? params.content ?? '' : params.content,
-    thumbnailURL: resetDefaults ? params.thumbnailURL ?? '' : params.thumbnailURL
+const findPostsSchema = {
+  ...basePostSchema,
+  definitions: {
+    attribute: attributeSchema
+  },
+  properties: {
+    ...basePostSchema.properties,
+    skip: { type: 'number' },
+    take: { type: 'number' },
+    sort: { enum: Object.values(Sort), default: Sort.NEWEST },
+    contentContains: { type: 'string' },
+    contentStartsWith: { type: 'string' },
+    contentEndsWith: { type: 'string' },
+    attributes: { 
+      type: 'array',
+      items: { '$ref': '#/components/schemas/attribute' }
+    }
   }
+} as const;
 
-  return undefinedMode === 'remove' ? removeEmptyParams(res) : res;
-}
+type FindPostsSchema = JTDDataType<typeof findPostsSchema>;
 
-enum Sort {
-  OLDEST = 'oldest',
-  NEWEST = 'newest'
-}
+const createPostSchema = {
+  ...basePostSchema,
+  required: ['authorID']
+} as const;
 
-function getOrderBy(sort: Sort) {
-  switch (sort) {
-    case Sort.OLDEST:
-      return { 'post.createdAt': 'ASC' as 'ASC' };
-    case Sort.NEWEST:
-      return { 'post.createdAt': 'DESC' as 'DESC' };
-  }
-}
+type CreatePostSchema = JTDDataType<typeof createPostSchema>;
+
+const modifyPostSchema = basePostSchema;
+
+type ModifyPostSchema = JTDDataType<typeof modifyPostSchema>;
 
 @ApiDefineTag({
   name: 'Post',
@@ -77,6 +83,8 @@ function getOrderBy(sort: Sort) {
 })
 @ApiUseTag('Post')
 export class PostController {
+  @dependency
+  prisma: PrismaService;
 
   @Get()
   @ApiOperationId('findPosts')
@@ -87,34 +95,52 @@ export class PostController {
   )
   @ApiResponse(400, { description: 'Invalid query parameters.' })
   @ApiResponse(200, { description: 'Returns a list of posts.' })
-  @ValidateQueryParam('skip', { type: 'number' }, { required: false })
-  @ValidateQueryParam('take', { type: 'number' }, { required: false })
-  @ValidateQueryParam('sort', { enum: Object.values(Sort), default: Sort.NEWEST }, { required: false })
-  @ValidateQuery({...postSchema, required: []})
-  async findPosts(ctx: Context<User>) {
-    const query = getRepository(Post).createQueryBuilder('post')
-      .select('post')
-      .addSelect('author')
-      .addSelect('parent.id')
-      .addSelect((subQuery) => {
-        return subQuery
-            .select('COUNT(comment.id)')
-            .from(Post, 'comment')
-            .where('comment.parent.id = post.id');
-        }, 'commentCount'
-      )
-      .leftJoin('post.author', 'author')
-      .leftJoin('post.parent', 'parent')
-      .where(getPostParams(ctx.request.query, 'remove'))
-      .orderBy(getOrderBy(ctx.request.query.sort))
-      .skip(ctx.request.query.skip)
-      .take(ctx.request.query.take);
+  @ParseAttributes()
+  @ValidateQuery(findPostsSchema)
+  async findPosts(ctx: Context) {
+    const query = ctx.request.query as FindPostsSchema;
 
-    const posts = await query.getRawAndEntities();
+    const where: Prisma.PostWhereInput = {
+      authorID: query.authorID,
+      content: {
+        equals: query.content,
+        contains: query.contentContains,
+        startsWith: query.contentStartsWith,
+        endsWith: query.contentEndsWith,
+      },
+      // Due to limitations with our frankensteined AJV JSD/JTD types, we can't type this properly
+      parentID: query.parentID as number | undefined | null,
+      recipientUserID: query.recipientUserID as number | undefined | null,
+      recipientGroupID: query.recipientGroupID as number | undefined | null,
+      AND: apiAttributesToPrisma(query.attributes)
+    };
 
-    const annotatedPosts = posts.entities.map((post, idx) => ({...post, commentCount: posts.raw[idx].commentCount }));
+    const res = await this.prisma.client.$transaction([
+      this.prisma.client.post.findMany({
+        include: {
+          author: {
+            select: userSelectFields
+          },
+          recipientUser: {
+            select: userSelectFields
+          },
+          recipientGroup: true,
+          reactions: true,
+          _count: {
+            select: { children: true }
+          }
+        },
+        skip: query.skip,
+        take: query.take,
+        orderBy: {
+          created: query.sort === Sort.OLDEST ? Prisma.SortOrder.asc : Prisma.SortOrder.desc
+        },
+        where
+      }),
+      this.prisma.client.post.count({where})
+    ])
 
-    return new HttpResponseOK([annotatedPosts, await query.getCount()]);
+    return new HttpResponseOK(res);
   }
 
   @Get('/:postId')
@@ -123,25 +149,28 @@ export class PostController {
   @ApiResponse(404, { description: 'Post not found.' })
   @ApiResponse(200, { description: 'Returns the post.' })
   @ValidatePathParam('postId', { type: 'number' })
-  async findPostById(ctx: Context<User>) {
-    const post = await getRepository(Post).createQueryBuilder('post')
-      .select('post')
-      .addSelect('author')
-      .addSelect('parent.id')
-      .leftJoin('post.author', 'author')
-      .leftJoin('post.parent', 'parent')
-      .where({id: ctx.request.params.postId})
-      .getOne();
+  async findPostById(ctx: Context) {
+    const params = ctx.request.params as {postId: number};
+    const post = await this.prisma.client.post.findUnique({
+      include: {
+        author: {
+          select: userSelectFields
+        },
+        recipientUser: {
+          select: userSelectFields
+        },
+        recipientGroup: true,
+        reactions: true,
+        _count: {
+          select: { children: true }
+        }
+      },
+      where: { id: params.postId }
+    });
 
     if (!post) {
       return new HttpResponseNotFound();
     }
-
-    post.commentCount = await getRepository(Post).count({
-      parent: {
-        id: post.id
-      }
-    });
 
     return new HttpResponseOK(post);
   }
@@ -152,17 +181,37 @@ export class PostController {
   @ApiResponse(400, { description: 'Invalid post.' })
   @ApiResponse(201, { description: 'Post successfully created. Returns the post.' })
   @UserRequired()
-  @ValidateBody(postSchema)
-  async createPost(ctx: Context<User>) {
-    const post: Post = await getRepository(Post).save(
-      {
-        ...getPostParams(ctx.request.body, 'default'),
-        // We can't have the DB set both of these with triggers, obnoxiously (see post.entity.ts)
-        // Because of that, we'll set *both* here to ensure that they're consistent
-        createdAt: new Date(),
-        updatedAt: new Date()
+  @ValidateBody(createPostSchema)
+  async createPost(ctx: Context) {
+    const body = ctx.request.body as CreatePostSchema;
+    // Due to limitations with our frankensteined AJV JSD/JTD types, we can't type this properly
+    const attributes = body.attributes as Prisma.NullableJsonNullValueInput | Prisma.InputJsonValue;
+
+    const post = await this.prisma.client.post.create({
+      include: {
+        author: {
+          select: userSelectFields
+        },
+        recipientUser: {
+          select: userSelectFields
+        },
+        recipientGroup: true,
+        reactions: true,
+        _count: {
+          select: { children: true }
+        }
+      },
+      data: {
+        authorID: body.authorID,
+        content: body.content,
+        // Due to limitations with our frankensteined AJV JSD/JTD types, we can't type this properly
+        parentID: body.parentID as number | undefined | null,
+        recipientUserID: body.recipientUserID as number | undefined | null,
+        recipientGroupID: body.recipientGroupID as number | undefined | null,
+        attributes
       }
-    );
+    });
+
     return new HttpResponseCreated(post);
   }
 
@@ -174,51 +223,48 @@ export class PostController {
   @UserRequired()
   @ApiResponse(200, { description: 'Post successfully updated. Returns the post.' })
   @ValidatePathParam('postId', { type: 'number' })
-  @ValidateBody({ ...postSchema, required: [] })
-  async modifyPost(ctx: Context<User>) {
-    const post = await getRepository(Post).findOne({
-      id: ctx.request.params.postId
-    });
+  @ValidateBody(modifyPostSchema)
+  async modifyPost(ctx: Context) {
+    const params = ctx.request.params as { postId: number };
+    const body = ctx.request.body as ModifyPostSchema;
+    // Due to limitations with our frankensteined AJV JSD/JTD types, we can't type this properly
+    const attributes = body.attributes as Prisma.NullableJsonNullValueInput | Prisma.InputJsonValue;
 
-    if (!post) {
-      return new HttpResponseNotFound();
+    try {
+      const post = await this.prisma.client.post.update({
+        include: {
+          author: {
+            select: userSelectFields
+          },
+          recipientUser: {
+            select: userSelectFields
+          },
+          recipientGroup: true,
+          reactions: true,
+          _count: {
+            select: { children: true }
+          }
+        },
+        where: { id: params.postId },
+        data: {
+          authorID: body.authorID,
+          content: body.content,
+          // Due to limitations with our frankensteined AJV JSD/JTD types, we can't type this properly
+          parentID: body.parentID as number | undefined | null,
+          recipientUserID: body.recipientUserID as number | undefined | null,
+          recipientGroupID: body.recipientGroupID as number | undefined | null,
+          attributes
+        }
+      });
+  
+      return new HttpResponseOK(post);
+    } catch(e) {
+      if (e instanceof PrismaClientKnownRequestError) {
+        // Record to update not found
+        if (e.code === 'P2025') return new HttpResponseNotFound();
+      }
+      throw e;
     }
-
-    const oldParent = post.parent;
-
-    Object.assign(post, getPostParams(ctx.request.body, 'remove'));
-
-    await getRepository(Post).save(post);
-
-    return new HttpResponseOK(post);
-  }
-
-  @Put('/:postId')
-  @ApiOperationId('replacePost')
-  @ApiOperationSummary('Update/replace an existing post.')
-  @ApiResponse(400, { description: 'Invalid post.' })
-  @ApiResponse(404, { description: 'Post not found.' })
-  @ApiResponse(200, { description: 'Post successfully updated. Returns the post.' })
-  @UserRequired()
-  @ValidatePathParam('postId', { type: 'number' })
-  @ValidateBody(postSchema)
-  async replacePost(ctx: Context<User>) {
-    const post = await getRepository(Post).findOne({
-      id: ctx.request.params.postId,
-      author: ctx.user
-    });
-
-    if (!post) {
-      return new HttpResponseNotFound();
-    }
-
-    const oldParent = post.parent;
-
-    Object.assign(post, getPostParams(ctx.request.body, 'default'));
-
-    await getRepository(Post).save(post);
-
-    return new HttpResponseOK(post);
   }
 
   @Delete('/:postId')
@@ -228,18 +274,22 @@ export class PostController {
   @ApiResponse(204, { description: 'Post successfully deleted.' })
   @UserRequired()
   @ValidatePathParam('postId', { type: 'number' })
-  async deletePost(ctx: Context<User>) {
-    const post = await getRepository(Post).findOne({
-      id: ctx.request.params.postId
-    });
+  async deletePost(ctx: Context) {
+    const params = ctx.request.params as { postId: number };
 
-    if (!post) {
-      return new HttpResponseNotFound();
+    try {
+      await this.prisma.client.post.delete({
+        where: { id: params.postId }
+      });
+
+      return new HttpResponseNoContent();
+    } catch(e) {
+      if (e instanceof PrismaClientKnownRequestError) {
+        // Record to delete not found
+        if (e.code === 'P2025') return new HttpResponseNotFound();
+      }
+      throw e;
     }
-
-    await getRepository(Post).delete(ctx.request.params.postId);
-
-    return new HttpResponseNoContent();
   }
 
 }

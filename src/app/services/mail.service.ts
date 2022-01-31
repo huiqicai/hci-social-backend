@@ -14,7 +14,6 @@ export class Mail {
     send(to: string, subject: string, text: string) {
         this.transport.sendMail({ from: 'cse370-hci-social-apps@buffalo.edu', to, subject, text }, (_, {message}) => {
             if (process.env.NODE_ENV !== 'production') {
-                const {to, subject, text} = JSON.parse(message);
                 console.log(`Email sent!\n\tTo: ${JSON.stringify(to)}\n\tSubject: ${subject}\n\tMessage: ${text}`);
             }
         });

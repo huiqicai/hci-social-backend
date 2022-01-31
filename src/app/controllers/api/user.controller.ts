@@ -1,48 +1,59 @@
 import {
   ApiDefineTag,
   ApiOperationDescription, ApiOperationId, ApiOperationSummary, ApiResponse,
-  ApiUseTag, Context, Delete, Get, HttpResponseBadRequest, HttpResponseCreated,
+  ApiUseTag, Context, Delete, dependency, Get, HttpResponseCreated,
   HttpResponseNoContent, HttpResponseNotFound, HttpResponseOK, Patch, Post,
-  Put, UserRequired, ValidateBody, ValidatePathParam, ValidateQueryParam
+  UserRequired, ValidateBody, ValidatePathParam
 } from '@foal/core';
-import { getRepository } from 'typeorm';
+import { Prisma } from '@prisma/client';
+import { PrismaClientKnownRequestError } from '@prisma/client/runtime';
+import { ParseAttributes, ValidateQuery } from '../../hooks';
+import { JTDDataType } from '../../jtd';
+import { Prisma as PrismaService } from '../../services';
+import { apiAttributesToPrisma, attributeSchema, userSelectFields } from '../../utils';
 
-import { User, UserArtifact } from '../../entities';
-import { ValidateQuery } from '../../hooks';
-import { removeEmptyParams } from '../../utils';
+const baseUserSchema = {
+  type: 'object',
+  additionalProperties: false,
+  properties: {
+    email: { type: 'string' },
+    attributes: { type: 'object', additionalProperties: true }
+  },
+  required: []
+} as const;
 
-function getUserSchema(withPassword) {
-  return {
-    additionalProperties: false,
-    properties: {
-      email: { type: 'string' },
-      ...(withPassword ? {password: { type: 'string' }} : {}),
-      username: { type: 'string' },
-      firstName: { type: 'string' },
-      lastName: { type: 'string' },
-      status: { type: 'string' },
-      role: { type: 'string' },
-    },
-    required: [ 'email', ...(withPassword ? ['password'] : []) ],
-    type: 'object',
-  };
-}
-
-function getUserParams(params: any, undefinedMode: 'remove' | 'default') {
-  const resetDefaults = undefinedMode === 'default';
-
-  const res = {
-    email: params.email,
-    password: params.password,
-    username: resetDefaults ? params.username ?? '' : params.username,
-    firstName: resetDefaults ? params.firstName ?? '' : params.firstName,
-    lastName: resetDefaults ? params.lastName ?? '' : params.lastName,
-    status: resetDefaults ? params.status ?? '' : params.status,
-    role: resetDefaults ? params.role ?? '' : params.role
+const findUsersSchema = {
+  ...baseUserSchema,
+  definitions: {
+    attribute: attributeSchema
+  },
+  properties: {
+    ...baseUserSchema.properties,
+    skip: { type: 'number' },
+    take: { type: 'number' },
+    attributes: { 
+      type: 'array',
+      items: { '$ref': '#/components/schemas/attribute' }
+    }
   }
-  
-  return undefinedMode === 'remove' ? removeEmptyParams(res) : res;
-}
+} as const;
+
+type FindUsersSchema = JTDDataType<typeof findUsersSchema>;
+
+const createUserSchema = {
+  ...baseUserSchema,
+  properties: {
+    ...baseUserSchema.properties,
+    password: { type: 'string' }
+  },
+  required: ['email', 'password']
+} as const;
+
+type CreateUserSchema = JTDDataType<typeof createUserSchema>;
+
+const modifyUserSchema = baseUserSchema;
+
+type ModifyUserSchema = JTDDataType<typeof modifyUserSchema>;
 
 @ApiDefineTag({
   name: 'User',
@@ -52,27 +63,39 @@ function getUserParams(params: any, undefinedMode: 'remove' | 'default') {
 })
 @ApiUseTag('User')
 export class UserController {
+  @dependency
+  prisma: PrismaService
 
   @Get()
-  @ApiOperationId('findUser')
-  @ApiOperationSummary('Find user.')
+  @ApiOperationId('findUsers')
+  @ApiOperationSummary('Find users.')
   @ApiOperationDescription(
     'The query parameters "skip" and "take" can be used for pagination. The first ' +
     'is the offset and the second is the number of elements to be returned.'
   )
   @ApiResponse(400, { description: 'Invalid query parameters.' })
   @ApiResponse(200, { description: 'Returns a list of users.' })
-  @ValidateQueryParam('skip', { type: 'number' }, { required: false })
-  @ValidateQueryParam('take', { type: 'number' }, { required: false })
-  @ValidateQuery({...getUserSchema(false), required: []})
-  async findUsers(ctx: Context<User>) {
-    const users = await getRepository(User).findAndCount({
-      skip: ctx.request.query.skip,
-      take: ctx.request.query.take,
-      where: getUserParams(ctx.request.query, 'remove')
-    });
+  @ParseAttributes()
+  @ValidateQuery(findUsersSchema)
+  async findUsers(ctx: Context) {
+    const query = ctx.request.query as FindUsersSchema;
+
+    const where: Prisma.UserWhereInput = {
+      email: query.email,
+      AND: apiAttributesToPrisma(query.attributes)
+    };
     
-    return new HttpResponseOK(users);
+    const res = await this.prisma.client.$transaction([
+      this.prisma.client.user.findMany({
+        select: userSelectFields,
+        skip: query.skip,
+        take: query.take,
+        where
+      }),
+      this.prisma.client.user.count({where})
+    ])
+
+    return new HttpResponseOK(res);
   }
 
   @Get('/:userId')
@@ -81,9 +104,11 @@ export class UserController {
   @ApiResponse(404, { description: 'User not found.' })
   @ApiResponse(200, { description: 'Returns the user.' })
   @ValidatePathParam('userId', { type: 'number' })
-  async findUserById(ctx: Context<User>) {
-    const user = await getRepository(User).findOne({
-      id: ctx.request.params.userId
+  async findUserById(ctx: Context) {
+    const params = ctx.request.params as {userId: number};
+    const user = await this.prisma.client.user.findUnique({
+      select: userSelectFields,
+      where: { id: params.userId }
     });
 
     if (!user) {
@@ -99,11 +124,21 @@ export class UserController {
   @ApiResponse(400, { description: 'Invalid user.' })
   @ApiResponse(201, { description: 'User successfully created. Returns the user.' })
   @UserRequired()
-  @ValidateBody(getUserSchema(true))
-  async createUser(ctx: Context<User>) {
-    const user = await getRepository(User).save(
-      getUserParams(ctx.request.body, 'default')
-    );
+  @ValidateBody(createUserSchema)
+  async createUser(ctx: Context) {
+    const body = ctx.request.body as CreateUserSchema;
+    // Due to limitations with our frankensteined AJV JSD/JTD types, we can't type this properly
+    const attributes = body.attributes as Prisma.NullableJsonNullValueInput | Prisma.InputJsonValue;
+
+    const user = await this.prisma.client.user.create({
+      select: userSelectFields,
+      data: {
+        email: body.email,
+        password: body.password,
+        attributes
+      }
+    });
+    
     return new HttpResponseCreated(user);
   }
 
@@ -115,46 +150,28 @@ export class UserController {
   @ApiResponse(200, { description: 'User successfully updated. Returns the user.' })
   @UserRequired()
   @ValidatePathParam('userId', { type: 'number' })
-  @ValidateBody({ ...getUserSchema(false), required: [] })
-  async modifyUser(ctx: Context<User>) {
-    const user = await getRepository(User).findOne({
-      id: ctx.request.params.userId,
-    });
+  @ValidateBody(modifyUserSchema)
+  async modifyUser(ctx: Context) {
+    const params = ctx.request.params as { userId: number };
+    const body = ctx.request.body as ModifyUserSchema;
+    // Due to limitations with our frankensteined AJV JSD/JTD types, we can't type this properly
+    const attributes = body.attributes as Prisma.NullableJsonNullValueInput | Prisma.InputJsonValue;
 
-    if (!user) {
-      return new HttpResponseNotFound();
+    try {
+      const user = await this.prisma.client.user.update({
+        select: userSelectFields,
+        where: { id: params.userId },
+        data: { email: body.email, attributes }
+      });
+  
+      return new HttpResponseOK(user);
+    } catch(e) {
+      if (e instanceof PrismaClientKnownRequestError) {
+        // Record to update not found
+        if (e.code === 'P2025') return new HttpResponseNotFound();
+      }
+      throw e;
     }
-
-    Object.assign(user, getUserParams(ctx.request.body, 'remove'));
-
-    await getRepository(User).save(user);
-
-    return new HttpResponseOK(user);
-  }
-
-  @Put('/:userId')
-  @ApiOperationId('replaceUser')
-  @ApiOperationSummary('Update/replace an existing user.')
-  @ApiResponse(400, { description: 'Invalid user.' })
-  @ApiResponse(404, { description: 'User not found.' })
-  @ApiResponse(200, { description: 'User successfully updated. Returns the user.' })
-  @UserRequired()
-  @ValidatePathParam('userId', { type: 'number' })
-  @ValidateBody(getUserSchema(false))
-  async replaceUser(ctx: Context<User>) {
-    const user = await getRepository(User).findOne({
-      id: ctx.request.params.userId,
-    });
-
-    if (!user) {
-      return new HttpResponseNotFound();
-    }
-
-    Object.assign(user, getUserParams(ctx.request.body, 'default'));
-
-    await getRepository(User).save(user);
-
-    return new HttpResponseOK(user);
   }
 
   @Delete('/:userId')
@@ -165,25 +182,22 @@ export class UserController {
   @ApiResponse(204, { description: 'User successfully deleted.' })
   @UserRequired()
   @ValidatePathParam('userId', { type: 'number' })
-  async deleteUser(ctx: Context<User>) {
-    const user = await getRepository(User).findOne({
-      id: ctx.request.params.userId
-    });
+  async deleteUser(ctx: Context) {
+    const params = ctx.request.params as { userId: number };
 
-    if (!user) {
-      return new HttpResponseNotFound();
+    try {
+      await this.prisma.client.user.delete({
+        where: { id: params.userId }
+      });
+
+      return new HttpResponseNoContent();
+    } catch(e) {
+      if (e instanceof PrismaClientKnownRequestError) {
+        // Record to delete not found
+        if (e.code === 'P2025') return new HttpResponseNotFound();
+      }
+      throw e;
     }
-
-    const artifacts = await getRepository(UserArtifact).count({ owner: user });
-
-    if (artifacts > 0) {
-      return new HttpResponseBadRequest("This user has user artifacts that must be deleted first.");
-    }
-
-    await getRepository(User).delete(ctx.request.params.userId);
-
-    return new HttpResponseNoContent();
   }
-
 }
   

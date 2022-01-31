@@ -1,50 +1,58 @@
 import {
   ApiDefineTag,
   ApiOperationDescription, ApiOperationId, ApiOperationSummary, ApiResponse,
-  ApiUseTag, Context, Delete, Get, HttpResponseCreated,
+  ApiUseTag, Context, Delete, dependency, Get, HttpResponseCreated,
   HttpResponseNoContent, HttpResponseNotFound, HttpResponseOK, Patch, Post,
-  Put, UserRequired, ValidateBody, ValidatePathParam, ValidateQueryParam
+  UserRequired, ValidateBody, ValidatePathParam
 } from '@foal/core';
-import { getRepository } from 'typeorm';
-
-import { Group, User } from '../../entities';
+import { Prisma } from '@prisma/client';
+import { PrismaClientKnownRequestError } from '@prisma/client/runtime';
 import { ValidateQuery } from '../../hooks';
-import { removeEmptyParams } from '../../utils';
+import { JTDDataType } from '../../jtd';
+import { Prisma as PrismaService } from '../../services';
+import { apiAttributesToPrisma, attributeSchema } from '../../utils';
 
-const groupSchema = {
+const baseGroupSchema = {
   additionalProperties: false,
   properties: {
-    ownerID: {
-      description: 'The user that created the group or is otherwise considered its owner. If you ' +
-        'want system wide groups, you might set the user ID to `null` to specify a system group.',
-      anyOf: [{ type: 'number' }, { type: 'null' }]
-    },
     name: {
       description: 'Implementation specific field to store the name of this particular group',
       type: 'string'
     },
-    type: {
-      description: 'Implementation specific field to categorize groups',
-      type: 'string'
-    },
+    attributes: { type: 'object', additionalProperties: true }
   },
   required: [],
   type: 'object',
-};
+} as const;
 
-function getGroupParams(params: any, undefinedMode: 'remove' | 'default') {
-  const resetDefaults = undefinedMode === 'default';
-
-  const res = {
-    owner: {
-      id: resetDefaults ? params.ownerID ?? null : params.ownerID
-    },
-    name: resetDefaults ? params.name ?? '' : params.name,
-    type: resetDefaults ? params.type ?? '' : params.type
+const findGroupsSchema = {
+  ...baseGroupSchema,
+  definitions: {
+    attribute: attributeSchema
+  },
+  properties: {
+    ...baseGroupSchema.properties,
+    skip: { type: 'number' },
+    take: { type: 'number' },
+    attributes: { 
+      type: 'array',
+      items: { '$ref': '#/components/schemas/attribute' }
+    }
   }
+} as const;
 
-  return undefinedMode === 'remove' ? removeEmptyParams(res) : res;
-}
+type FindGroupsSchema = JTDDataType<typeof findGroupsSchema>;
+
+const createGroupSchema = {
+  ...baseGroupSchema,
+  required: ['name']
+} as const;
+
+type CreateGroupSchema = JTDDataType<typeof createGroupSchema>;
+
+const modifyGroupSchema = baseGroupSchema;
+
+type ModifyGroupSchema = JTDDataType<typeof modifyGroupSchema>;
 
 @ApiDefineTag({
   name: 'Group',
@@ -54,6 +62,8 @@ function getGroupParams(params: any, undefinedMode: 'remove' | 'default') {
 })
 @ApiUseTag('Group')
 export class GroupController {
+  @dependency
+  prisma: PrismaService;
 
   @Get()
   @ApiOperationId('findGroups')
@@ -64,17 +74,25 @@ export class GroupController {
   )
   @ApiResponse(400, { description: 'Invalid query parameters.' })
   @ApiResponse(200, { description: 'Returns a list of groups.' })
-  @ValidateQueryParam('skip', { type: 'number' }, { required: false })
-  @ValidateQueryParam('take', { type: 'number' }, { required: false })
-  @ValidateQuery({...groupSchema, required: []})
-  async findGroups(ctx: Context<User>) {
-    const groups = await getRepository(Group).findAndCount({
-      relations: ['owner'],
-      skip: ctx.request.query.skip,
-      take: ctx.request.query.take,
-      where: getGroupParams(ctx.request.query, 'remove')
-    });
-    return new HttpResponseOK(groups);
+  @ValidateQuery(findGroupsSchema)
+  async findGroups(ctx: Context) {
+    const query = ctx.request.query as FindGroupsSchema;
+
+    const where: Prisma.GroupWhereInput = {
+      name: query.name,
+      AND: apiAttributesToPrisma(query.attributes)
+    };
+
+    const res = await this.prisma.client.$transaction([
+      this.prisma.client.group.findMany({
+        skip: query.skip,
+        take: query.take,
+        where
+      }),
+      this.prisma.client.group.count({where})
+    ]);
+    
+    return new HttpResponseOK(res);
   }
 
   @Get('/:groupId')
@@ -83,10 +101,10 @@ export class GroupController {
   @ApiResponse(404, { description: 'Group not found.' })
   @ApiResponse(200, { description: 'Returns the group.' })
   @ValidatePathParam('groupId', { type: 'number' })
-  async findGroupById(ctx: Context<User>) {
-    const group = await getRepository(Group).findOne({
-      relations: ['owner'],
-      where: { id: ctx.request.params.groupId }
+  async findGroupById(ctx: Context) {
+    const params = ctx.request.params as {groupId: number};
+    const group = await this.prisma.client.group.findUnique({
+      where: { id: params.groupId }
     });
 
     if (!group) {
@@ -102,11 +120,19 @@ export class GroupController {
   @ApiResponse(400, { description: 'Invalid group.' })
   @ApiResponse(201, { description: 'Group successfully created. Returns the group.' })
   @UserRequired()
-  @ValidateBody(groupSchema)
-  async createGroup(ctx: Context<User>) {
-    const group = await getRepository(Group).save(
-      getGroupParams(ctx.request.body, 'default')
-    );
+  @ValidateBody(createGroupSchema)
+  async createGroup(ctx: Context) {
+    const body = ctx.request.body as CreateGroupSchema;
+    // Due to limitations with our frankensteined AJV JSD/JTD types, we can't type this properly
+    const attributes = body.attributes as Prisma.NullableJsonNullValueInput | Prisma.InputJsonValue;
+
+    const group = await this.prisma.client.group.create({
+      data: {
+        name: body.name,
+        attributes
+      }
+    });
+
     return new HttpResponseCreated(group);
   }
 
@@ -118,46 +144,27 @@ export class GroupController {
   @ApiResponse(200, { description: 'Group successfully updated. Returns the group.' })
   @UserRequired()
   @ValidatePathParam('groupId', { type: 'number' })
-  @ValidateBody({ ...groupSchema, required: [] })
-  async modifyGroup(ctx: Context<User>) {
-    const group = await getRepository(Group).findOne({
-      id: ctx.request.params.groupId
-    });
+  @ValidateBody(modifyGroupSchema)
+  async modifyGroup(ctx: Context) {
+    const params = ctx.request.params as { groupId: number };
+    const body = ctx.request.body as ModifyGroupSchema;
+    // Due to limitations with our frankensteined AJV JSD/JTD types, we can't type this properly
+    const attributes = body.attributes as Prisma.NullableJsonNullValueInput | Prisma.InputJsonValue;
 
-    if (!group) {
-      return new HttpResponseNotFound();
+    try {
+      const group = await this.prisma.client.group.update({
+        where: { id: params.groupId },
+        data: { name: body.name, attributes }
+      });
+  
+      return new HttpResponseOK(group);
+    } catch(e) {
+      if (e instanceof PrismaClientKnownRequestError) {
+        // Record to update not found
+        if (e.code === 'P2025') return new HttpResponseNotFound();
+      }
+      throw e;
     }
-
-    Object.assign(group, getGroupParams(ctx.request.body, 'remove'));
-
-    await getRepository(Group).save(group);
-
-    return new HttpResponseOK(group);
-  }
-
-  @Put('/:groupId')
-  @ApiOperationId('replaceGroup')
-  @ApiOperationSummary('Update/replace an existing group.')
-  @ApiResponse(400, { description: 'Invalid group.' })
-  @ApiResponse(404, { description: 'Group not found.' })
-  @ApiResponse(200, { description: 'Group successfully updated. Returns the group.' })
-  @UserRequired()
-  @ValidatePathParam('groupId', { type: 'number' })
-  @ValidateBody(groupSchema)
-  async replaceGroup(ctx: Context<User>) {
-    const group = await getRepository(Group).findOne({
-      id: ctx.request.params.groupId
-    });
-
-    if (!group) {
-      return new HttpResponseNotFound();
-    }
-
-    Object.assign(group, getGroupParams(ctx.request.body, 'default'));
-
-    await getRepository(Group).save(group);
-
-    return new HttpResponseOK(group);
   }
 
   @Delete('/:groupId')
@@ -167,18 +174,21 @@ export class GroupController {
   @ApiResponse(204, { description: 'Group successfully deleted.' })
   @UserRequired()
   @ValidatePathParam('groupId', { type: 'number' })
-  async deleteGroup(ctx: Context<User>) {
-    const group = await getRepository(Group).findOne({
-      id: ctx.request.params.groupId
-    });
+  async deleteGroup(ctx: Context) {
+    const params = ctx.request.params as { groupId: number };
 
-    if (!group) {
-      return new HttpResponseNotFound();
+    try {
+      await this.prisma.client.group.delete({
+        where: { id: params.groupId }
+      });
+
+      return new HttpResponseNoContent();
+    } catch(e) {
+      if (e instanceof PrismaClientKnownRequestError) {
+        // Record to delete not found
+        if (e.code === 'P2025') return new HttpResponseNotFound();
+      }
+      throw e;
     }
-
-    await getRepository(Group).delete(ctx.request.params.groupId);
-
-    return new HttpResponseNoContent();
   }
-
 }

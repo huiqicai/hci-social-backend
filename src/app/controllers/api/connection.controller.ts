@@ -1,53 +1,57 @@
 import {
   ApiDefineTag,
   ApiOperationDescription, ApiOperationId, ApiOperationSummary, ApiResponse,
-  ApiUseTag, Context, Delete, Get, HttpResponseCreated,
+  ApiUseTag, Context, Delete, dependency, Get, HttpResponseCreated,
   HttpResponseNoContent, HttpResponseNotFound, HttpResponseOK, Patch, Post,
-  Put, UserRequired, ValidateBody, ValidatePathParam, ValidateQueryParam
+  UserRequired, ValidateBody, ValidatePathParam
 } from '@foal/core';
-import { getRepository } from 'typeorm';
-
-import { Connection, User } from '../../entities';
+import { Prisma } from '@prisma/client';
+import { PrismaClientKnownRequestError } from '@prisma/client/runtime';
 import { ValidateQuery } from '../../hooks';
-import { removeEmptyParams } from '../../utils';
+import { JTDDataType } from '../../jtd';
+import { Prisma as PrismaService } from '../../services';
+import { apiAttributesToPrisma, attributeSchema, userSelectFields } from '../../utils';
 
-const connectionSchema = {
+const baseConnectionSchema = {
+  type: 'object',
   additionalProperties: false,
   properties: {
-    userID: { type: 'number' },
-    connectedUserID: { type: 'number' },
-    type: {
-      type: 'string',
-      description: 'Implementation specific field for allowing different types of connections; ' +
-        'you may want to have both friends and followers, for example'
-    },
-    status: {
-      type: 'string',
-      description: 'Implementation specific field for differentiating the current status of a connection; ' +
-        'if people have to accept friend requests, for example, this could be set to "pending"' +
-        'when a request is made.  If you block a friend, this may be set to "blocked", and so on.'
-    }
+    fromUserID: { type: 'number' },
+    toUserID: { type: 'number' },
+    attributes: { type: 'object', additionalProperties: true }
   },
-  required: [ 'userID', 'connectedUserID' ],
-  type: 'object',
-};
+  required: []
+} as const;
 
-function getConnectionParams(params: any, undefinedMode: 'remove' | 'default') {
-  const resetDefaults = undefinedMode === 'default';
-
-  const res = {
-    user: {
-      id: params.userID
-    },
-    connectedUser: {
-      id: params.connectedUserID
-    },
-    type: resetDefaults ? params.type ?? '' : params.type,
-    status: resetDefaults ? params.status ?? '' : params.status
+const findConnectionsSchema = {
+  ...baseConnectionSchema,
+  definitions: {
+    attribute: attributeSchema
+  },
+  properties: {
+    ...baseConnectionSchema.properties,
+    skip: { type: 'number' },
+    take: { type: 'number' },
+    anyUserID: { type: 'number', description: 'Returns records where either fromUserID or toUserID is the passed value' },
+    attributes: { 
+      type: 'array',
+      items: { '$ref': '#/components/schemas/attribute' }
+    }
   }
+} as const;
 
-  return undefinedMode === 'remove' ? removeEmptyParams(res) : res;
-}
+type FindConnectionsSchema = JTDDataType<typeof findConnectionsSchema>;
+
+const createConnectionSchema = {
+  ...baseConnectionSchema,
+  required: ['fromUserID', 'toUserID']
+} as const;
+
+type CreateConnectionSchema = JTDDataType<typeof createConnectionSchema>;
+
+const modifyConnectionSchema = baseConnectionSchema;
+
+type ModifyConnectionSchema = JTDDataType<typeof modifyConnectionSchema>;
 
 @ApiDefineTag({
   name: 'Connection',
@@ -56,6 +60,8 @@ function getConnectionParams(params: any, undefinedMode: 'remove' | 'default') {
 })
 @ApiUseTag('Connection')
 export class ConnectionController {
+  @dependency
+  prisma: PrismaService;
 
   @Get()
   @ApiOperationId('findConnections')
@@ -66,17 +72,40 @@ export class ConnectionController {
   )
   @ApiResponse(400, { description: 'Invalid query parameters.' })
   @ApiResponse(200, { description: 'Returns a list of connections.' })
-  @ValidateQueryParam('skip', { type: 'number' }, { required: false })
-  @ValidateQueryParam('take', { type: 'number' }, { required: false })
-  @ValidateQuery({...connectionSchema, required: []})
-  async findConnections(ctx: Context<User>) {
-    const connections = await getRepository(Connection).findAndCount({
-      relations: ['user', 'connectedUser'],
-      skip: ctx.request.query.skip,
-      take: ctx.request.query.take,
-      where: getConnectionParams(ctx.request.query, 'remove')
-    });
-    return new HttpResponseOK(connections);
+  @ValidateQuery(findConnectionsSchema)
+  async findConnections(ctx: Context) {
+    const query = ctx.request.query as FindConnectionsSchema;
+
+    const userIdFilter = (ids: (number | undefined)[]) => {
+      const definedIds = ids.filter((id): id is number => id !== undefined);
+      if (definedIds.length == 0) return undefined;
+      else return {in: definedIds};
+    }
+
+    const where: Prisma.ConnectionWhereInput = {
+      toUserID: userIdFilter([query.toUserID, query.anyUserID]),
+      fromUserID: userIdFilter([query.fromUserID, query.anyUserID]),
+      AND: apiAttributesToPrisma(query.attributes)
+    };
+
+    const res = await this.prisma.client.$transaction([
+      this.prisma.client.connection.findMany({
+        include: {
+          fromUser: {
+            select: userSelectFields
+          },
+          toUser: {
+            select: userSelectFields
+          }
+        },
+        skip: query.skip,
+        take: query.take,
+        where
+      }),
+      this.prisma.client.connection.count({where})
+    ]);
+
+    return new HttpResponseOK(res);
   }
 
   @Get('/:connectionId')
@@ -85,10 +114,18 @@ export class ConnectionController {
   @ApiResponse(404, { description: 'Connection not found.' })
   @ApiResponse(200, { description: 'Returns the connection.' })
   @ValidatePathParam('connectionId', { type: 'number' })
-  async findConnectionById(ctx: Context<User>) {
-    const connection = await getRepository(Connection).findOne({
-      relations: ['user', 'connectedUser'],
-      where: { id: ctx.request.params.connectionId }
+  async findConnectionById(ctx: Context) {
+    const params = ctx.request.params as {connectionId: number};
+    const connection = await this.prisma.client.connection.findUnique({
+      include: {
+        fromUser: {
+          select: userSelectFields
+        },
+        toUser: {
+          select: userSelectFields
+        }
+      },
+      where: { id: params.connectionId }
     });
 
     if (!connection) {
@@ -104,11 +141,28 @@ export class ConnectionController {
   @ApiResponse(400, { description: 'Invalid connection.' })
   @ApiResponse(201, { description: 'Connection successfully created. Returns the connection.' })
   @UserRequired()
-  @ValidateBody(connectionSchema)
-  async createConnection(ctx: Context<User>) {
-    const connection = await getRepository(Connection).save(
-      getConnectionParams(ctx.request.body, 'default')
-    );
+  @ValidateBody(createConnectionSchema)
+  async createConnection(ctx: Context) {
+    const body = ctx.request.body as CreateConnectionSchema;
+    // Due to limitations with our frankensteined AJV JSD/JTD types, we can't type this properly
+    const attributes = body.attributes as Prisma.NullableJsonNullValueInput | Prisma.InputJsonValue;
+
+    const connection = await this.prisma.client.connection.create({
+      include: {
+        fromUser: {
+          select: userSelectFields
+        },
+        toUser: {
+          select: userSelectFields
+        }
+      },
+      data: {
+        fromUserID: body.fromUserID,
+        toUserID: body.toUserID,
+        attributes
+      }
+    });
+
     return new HttpResponseCreated(connection);
   }
 
@@ -120,46 +174,35 @@ export class ConnectionController {
   @ApiResponse(200, { description: 'Connection successfully updated. Returns the connection.' })
   @UserRequired()
   @ValidatePathParam('connectionId', { type: 'number' })
-  @ValidateBody({ ...connectionSchema, required: [] })
-  async modifyConnection(ctx: Context<User>) {
-    const connection = await getRepository(Connection).findOne({
-      id: ctx.request.params.connectionId
-    });
+  @ValidateBody(modifyConnectionSchema)
+  async modifyConnection(ctx: Context) {
+    const params = ctx.request.params as { connectionId: number };
+    const body = ctx.request.body as ModifyConnectionSchema;
+    // Due to limitations with our frankensteined AJV JSD/JTD types, we can't type this properly
+    const attributes = body.attributes as Prisma.NullableJsonNullValueInput | Prisma.InputJsonValue;
 
-    if (!connection) {
-      return new HttpResponseNotFound();
+    try {
+      const connection = await this.prisma.client.connection.update({
+        include: {
+          fromUser: {
+            select: userSelectFields
+          },
+          toUser: {
+            select: userSelectFields
+          }
+        },
+        where: { id: params.connectionId },
+        data: { fromUserID: body.fromUserID, toUserID: body.toUserID, attributes }
+      });
+  
+      return new HttpResponseOK(connection);
+    } catch(e) {
+      if (e instanceof PrismaClientKnownRequestError) {
+        // Record to update not found
+        if (e.code === 'P2025') return new HttpResponseNotFound();
+      }
+      throw e;
     }
-
-    Object.assign(connection, getConnectionParams(ctx.request.body, 'remove'));
-
-    await getRepository(Connection).save(connection);
-
-    return new HttpResponseOK(connection);
-  }
-
-  @Put('/:connectionId')
-  @ApiOperationId('replaceConnection')
-  @ApiOperationSummary('Update/replace an existing connection.')
-  @ApiResponse(400, { description: 'Invalid connection.' })
-  @ApiResponse(404, { description: 'Connection not found.' })
-  @ApiResponse(200, { description: 'Connection successfully updated. Returns the connection.' })
-  @UserRequired()
-  @ValidatePathParam('connectionId', { type: 'number' })
-  @ValidateBody(connectionSchema)
-  async replaceConnection(ctx: Context<User>) {
-    const connection = await getRepository(Connection).findOne({
-      id: ctx.request.params.connectionId
-    });
-
-    if (!connection) {
-      return new HttpResponseNotFound();
-    }
-
-    Object.assign(connection, getConnectionParams(ctx.request.body, 'default'));
-
-    await getRepository(Connection).save(connection);
-
-    return new HttpResponseOK(connection);
   }
 
   @Delete('/:connectionId')
@@ -169,18 +212,21 @@ export class ConnectionController {
   @ApiResponse(204, { description: 'Connection successfully deleted.' })
   @UserRequired()
   @ValidatePathParam('connectionId', { type: 'number' })
-  async deleteConnection(ctx: Context<User>) {
-    const connection = await getRepository(Connection).findOne({
-      id: ctx.request.params.connectionId
-    });
+  async deleteConnection(ctx: Context) {
+    const params = ctx.request.params as { connectionId: number };
 
-    if (!connection) {
-      return new HttpResponseNotFound();
+    try {
+      await this.prisma.client.connection.delete({
+        where: { id: params.connectionId }
+      });
+
+      return new HttpResponseNoContent();
+    } catch(e) {
+      if (e instanceof PrismaClientKnownRequestError) {
+        // Record to delete not found
+        if (e.code === 'P2025') return new HttpResponseNotFound();
+      }
+      throw e;
     }
-
-    await getRepository(Connection).delete(ctx.request.params.connectionId);
-
-    return new HttpResponseNoContent();
   }
-
 }

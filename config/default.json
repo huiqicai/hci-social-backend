@@ -2,10 +2,10 @@
   "settings": {
     "loggerFormat": "tiny",
     "session": {
-      "store": "@foal/typeorm",
       "expirationTimeouts": {
         "inactivity": 86400
-      }
+      },
+      "store": "./app/services/session-store"
     },
     "disk": {
       "driver": "local",
@@ -18,9 +18,7 @@
     },
     "staticPathPrefix": "env(API_PREFIX)"
   },
-  "database": {
-    "type": "sqlite",
-    "database": "./db.sqlite3",
-    "synchronize": true
-  }
+  "api_prefix": "env(API_PREFIX)",
+  "listen_socket": "env(LISTEN_SOCKET)",
+  "listen_port": "env(LISTEN_PORT)"
 }

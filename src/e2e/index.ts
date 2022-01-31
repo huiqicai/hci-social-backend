@@ -1,20 +1,18 @@
 // 3p
 import { createApp } from '@foal/core';
+import { Application } from 'express';
 import * as request from 'supertest';
-import { getConnection } from 'typeorm';
 
 // App
 import { AppController } from '../app/controllers/app.controller';
 
 describe('The server', () => {
 
-  let app;
+  let app: Application;
 
   before(async () => {
-    app = await createApp(AppController);
+    app = await createApp(AppController) as Application;
   });
-
-  after(() => getConnection().close());
 
   it('should return a 200 status on GET / requests.', () => {
     return request(app)
