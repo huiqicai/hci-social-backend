@@ -28,9 +28,9 @@ Note that if there are any unapplied database migrations, you will still need to
 - `npm start` to run the app in production mode
 
 ## Development Scripts
-- `npm run reset-db` Clears all data in DB
-- `npm run push-schema` If updating the DB schema, updates your local database to match and regenerates the Prisma client
-- `npm run make-migrations` If updating the DB schema, generates migrations and runs them against your local database
+- `npm run reset-db` Clears all data in DB for all tenants
+- `npm run push-schema` If updating the DB schema, updates the local database of all tenants to match and regenerates the Prisma client
+- `npm run make-migrations` If updating the DB schema, generates migrations and runs them against your local database using the first configurd tenant
 - `npm run lint` Run ESLint to find any code style problems
 - `npm run lint-fix` Run ESLint and automatically fix issues where possible
 - `npm run test` Run mocha unit tests
