@@ -16,7 +16,7 @@ From there, there are two different ways to start the app
 ### Development
 The simplest way to get started is by running `npm run develop`. This will start the application
 in development mode, which configures the app appropriately for a local install and reloads itself
-if any changes are made. The API will be available at http://localhost:3001/api, and the Swagger UI
+if any changes are made. The API will be available at `http://localhost:3001/api/<tenantID>`, and the Swagger UI
 documentation will be available at http://localhost:3001/swagger
 
 Note that if there are any unapplied database migrations, you will still need to apply them via
