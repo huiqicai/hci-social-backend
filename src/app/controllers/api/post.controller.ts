@@ -9,7 +9,7 @@ import { Prisma } from '@prisma/client';
 import { PrismaClientKnownRequestError } from '@prisma/client/runtime';
 import { ParseAttributes, ValidateQuery } from '../../hooks';
 import { JTDDataType } from '../../jtd';
-import { Prisma as PrismaService } from '../../services';
+import { DB } from '../../services';
 import { apiAttributesToPrisma, attributeSchema, userSelectFields } from '../../utils';
 
 enum Sort {
@@ -84,7 +84,7 @@ type ModifyPostSchema = JTDDataType<typeof modifyPostSchema>;
 @ApiUseTag('Post')
 export class PostController {
   @dependency
-  prisma: PrismaService;
+  db: DB;
 
   @Get()
   @ApiOperationId('findPosts')
@@ -98,6 +98,7 @@ export class PostController {
   @ParseAttributes()
   @ValidateQuery(findPostsSchema)
   async findPosts(ctx: Context) {
+    const params = ctx.request.params as {tenantId: string};
     const query = ctx.request.query as FindPostsSchema;
 
     const where: Prisma.PostWhereInput = {
@@ -115,8 +116,8 @@ export class PostController {
       AND: apiAttributesToPrisma(query.attributes)
     };
 
-    const res = await this.prisma.client.$transaction([
-      this.prisma.client.post.findMany({
+    const res = await this.db.getClient(params.tenantId).$transaction([
+      this.db.getClient(params.tenantId).post.findMany({
         include: {
           author: {
             select: userSelectFields
@@ -137,7 +138,7 @@ export class PostController {
         },
         where
       }),
-      this.prisma.client.post.count({where})
+      this.db.getClient(params.tenantId).post.count({where})
     ])
 
     return new HttpResponseOK(res);
@@ -150,8 +151,8 @@ export class PostController {
   @ApiResponse(200, { description: 'Returns the post.' })
   @ValidatePathParam('postId', { type: 'number' })
   async findPostById(ctx: Context) {
-    const params = ctx.request.params as {postId: number};
-    const post = await this.prisma.client.post.findUnique({
+    const params = ctx.request.params as {postId: number, tenantId: string};
+    const post = await this.db.getClient(params.tenantId).post.findUnique({
       include: {
         author: {
           select: userSelectFields
@@ -183,11 +184,12 @@ export class PostController {
   @UserRequired()
   @ValidateBody(createPostSchema)
   async createPost(ctx: Context) {
+    const params = ctx.request.params as {tenantId: string};
     const body = ctx.request.body as CreatePostSchema;
     // Due to limitations with our frankensteined AJV JSD/JTD types, we can't type this properly
     const attributes = body.attributes as Prisma.NullableJsonNullValueInput | Prisma.InputJsonValue;
 
-    const post = await this.prisma.client.post.create({
+    const post = await this.db.getClient(params.tenantId).post.create({
       include: {
         author: {
           select: userSelectFields
@@ -225,13 +227,13 @@ export class PostController {
   @ValidatePathParam('postId', { type: 'number' })
   @ValidateBody(modifyPostSchema)
   async modifyPost(ctx: Context) {
-    const params = ctx.request.params as { postId: number };
+    const params = ctx.request.params as { postId: number, tenantId: string };
     const body = ctx.request.body as ModifyPostSchema;
     // Due to limitations with our frankensteined AJV JSD/JTD types, we can't type this properly
     const attributes = body.attributes as Prisma.NullableJsonNullValueInput | Prisma.InputJsonValue;
 
     try {
-      const post = await this.prisma.client.post.update({
+      const post = await this.db.getClient(params.tenantId).post.update({
         include: {
           author: {
             select: userSelectFields
@@ -275,10 +277,10 @@ export class PostController {
   @UserRequired()
   @ValidatePathParam('postId', { type: 'number' })
   async deletePost(ctx: Context) {
-    const params = ctx.request.params as { postId: number };
+    const params = ctx.request.params as { postId: number, tenantId: string };
 
     try {
-      await this.prisma.client.post.delete({
+      await this.db.getClient(params.tenantId).post.delete({
         where: { id: params.postId }
       });
 

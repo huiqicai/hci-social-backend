@@ -9,7 +9,7 @@ import { Prisma } from '@prisma/client';
 import { PrismaClientKnownRequestError } from '@prisma/client/runtime';
 import { ValidateQuery } from '../../hooks';
 import { JTDDataType } from '../../jtd';
-import { Prisma as PrismaService } from '../../services';
+import { DB } from '../../services';
 import { apiAttributesToPrisma, attributeSchema } from '../../utils';
 
 const baseGroupSchema = {
@@ -63,7 +63,7 @@ type ModifyGroupSchema = JTDDataType<typeof modifyGroupSchema>;
 @ApiUseTag('Group')
 export class GroupController {
   @dependency
-  prisma: PrismaService;
+  db: DB;
 
   @Get()
   @ApiOperationId('findGroups')
@@ -76,6 +76,7 @@ export class GroupController {
   @ApiResponse(200, { description: 'Returns a list of groups.' })
   @ValidateQuery(findGroupsSchema)
   async findGroups(ctx: Context) {
+    const params = ctx.request.params as {tenantId: string};
     const query = ctx.request.query as FindGroupsSchema;
 
     const where: Prisma.GroupWhereInput = {
@@ -83,13 +84,13 @@ export class GroupController {
       AND: apiAttributesToPrisma(query.attributes)
     };
 
-    const res = await this.prisma.client.$transaction([
-      this.prisma.client.group.findMany({
+    const res = await this.db.getClient(params.tenantId).$transaction([
+      this.db.getClient(params.tenantId).group.findMany({
         skip: query.skip,
         take: query.take,
         where
       }),
-      this.prisma.client.group.count({where})
+      this.db.getClient(params.tenantId).group.count({where})
     ]);
     
     return new HttpResponseOK(res);
@@ -102,8 +103,8 @@ export class GroupController {
   @ApiResponse(200, { description: 'Returns the group.' })
   @ValidatePathParam('groupId', { type: 'number' })
   async findGroupById(ctx: Context) {
-    const params = ctx.request.params as {groupId: number};
-    const group = await this.prisma.client.group.findUnique({
+    const params = ctx.request.params as {groupId: number, tenantId: string};
+    const group = await this.db.getClient(params.tenantId).group.findUnique({
       where: { id: params.groupId }
     });
 
@@ -122,11 +123,12 @@ export class GroupController {
   @UserRequired()
   @ValidateBody(createGroupSchema)
   async createGroup(ctx: Context) {
+    const params = ctx.request.params as {tenantId: string};
     const body = ctx.request.body as CreateGroupSchema;
     // Due to limitations with our frankensteined AJV JSD/JTD types, we can't type this properly
     const attributes = body.attributes as Prisma.NullableJsonNullValueInput | Prisma.InputJsonValue;
 
-    const group = await this.prisma.client.group.create({
+    const group = await this.db.getClient(params.tenantId).group.create({
       data: {
         name: body.name,
         attributes
@@ -146,13 +148,13 @@ export class GroupController {
   @ValidatePathParam('groupId', { type: 'number' })
   @ValidateBody(modifyGroupSchema)
   async modifyGroup(ctx: Context) {
-    const params = ctx.request.params as { groupId: number };
+    const params = ctx.request.params as { groupId: number, tenantId: string };
     const body = ctx.request.body as ModifyGroupSchema;
     // Due to limitations with our frankensteined AJV JSD/JTD types, we can't type this properly
     const attributes = body.attributes as Prisma.NullableJsonNullValueInput | Prisma.InputJsonValue;
 
     try {
-      const group = await this.prisma.client.group.update({
+      const group = await this.db.getClient(params.tenantId).group.update({
         where: { id: params.groupId },
         data: { name: body.name, attributes }
       });
@@ -175,10 +177,10 @@ export class GroupController {
   @UserRequired()
   @ValidatePathParam('groupId', { type: 'number' })
   async deleteGroup(ctx: Context) {
-    const params = ctx.request.params as { groupId: number };
+    const params = ctx.request.params as { groupId: number, tenantId: string };
 
     try {
-      await this.prisma.client.group.delete({
+      await this.db.getClient(params.tenantId).group.delete({
         where: { id: params.groupId }
       });
 

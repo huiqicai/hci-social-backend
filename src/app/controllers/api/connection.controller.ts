@@ -9,7 +9,7 @@ import { Prisma } from '@prisma/client';
 import { PrismaClientKnownRequestError } from '@prisma/client/runtime';
 import { ValidateQuery } from '../../hooks';
 import { JTDDataType } from '../../jtd';
-import { Prisma as PrismaService } from '../../services';
+import { DB } from '../../services';
 import { apiAttributesToPrisma, attributeSchema, userSelectFields } from '../../utils';
 
 const baseConnectionSchema = {
@@ -61,7 +61,7 @@ type ModifyConnectionSchema = JTDDataType<typeof modifyConnectionSchema>;
 @ApiUseTag('Connection')
 export class ConnectionController {
   @dependency
-  prisma: PrismaService;
+  db: DB;
 
   @Get()
   @ApiOperationId('findConnections')
@@ -74,6 +74,7 @@ export class ConnectionController {
   @ApiResponse(200, { description: 'Returns a list of connections.' })
   @ValidateQuery(findConnectionsSchema)
   async findConnections(ctx: Context) {
+    const params = ctx.request.params as {tenantId: string};
     const query = ctx.request.query as FindConnectionsSchema;
 
     const userIdFilter = (ids: (number | undefined)[]) => {
@@ -88,8 +89,8 @@ export class ConnectionController {
       AND: apiAttributesToPrisma(query.attributes)
     };
 
-    const res = await this.prisma.client.$transaction([
-      this.prisma.client.connection.findMany({
+    const res = await this.db.getClient(params.tenantId).$transaction([
+      this.db.getClient(params.tenantId).connection.findMany({
         include: {
           fromUser: {
             select: userSelectFields
@@ -102,7 +103,7 @@ export class ConnectionController {
         take: query.take,
         where
       }),
-      this.prisma.client.connection.count({where})
+      this.db.getClient(params.tenantId).connection.count({where})
     ]);
 
     return new HttpResponseOK(res);
@@ -115,8 +116,8 @@ export class ConnectionController {
   @ApiResponse(200, { description: 'Returns the connection.' })
   @ValidatePathParam('connectionId', { type: 'number' })
   async findConnectionById(ctx: Context) {
-    const params = ctx.request.params as {connectionId: number};
-    const connection = await this.prisma.client.connection.findUnique({
+    const params = ctx.request.params as {connectionId: number, tenantId: string};
+    const connection = await this.db.getClient(params.tenantId).connection.findUnique({
       include: {
         fromUser: {
           select: userSelectFields
@@ -143,11 +144,12 @@ export class ConnectionController {
   @UserRequired()
   @ValidateBody(createConnectionSchema)
   async createConnection(ctx: Context) {
+    const params = ctx.request.params as {tenantId: string};
     const body = ctx.request.body as CreateConnectionSchema;
     // Due to limitations with our frankensteined AJV JSD/JTD types, we can't type this properly
     const attributes = body.attributes as Prisma.NullableJsonNullValueInput | Prisma.InputJsonValue;
 
-    const connection = await this.prisma.client.connection.create({
+    const connection = await this.db.getClient(params.tenantId).connection.create({
       include: {
         fromUser: {
           select: userSelectFields
@@ -176,13 +178,13 @@ export class ConnectionController {
   @ValidatePathParam('connectionId', { type: 'number' })
   @ValidateBody(modifyConnectionSchema)
   async modifyConnection(ctx: Context) {
-    const params = ctx.request.params as { connectionId: number };
+    const params = ctx.request.params as { connectionId: number, tenantId: string };
     const body = ctx.request.body as ModifyConnectionSchema;
     // Due to limitations with our frankensteined AJV JSD/JTD types, we can't type this properly
     const attributes = body.attributes as Prisma.NullableJsonNullValueInput | Prisma.InputJsonValue;
 
     try {
-      const connection = await this.prisma.client.connection.update({
+      const connection = await this.db.getClient(params.tenantId).connection.update({
         include: {
           fromUser: {
             select: userSelectFields
@@ -213,10 +215,10 @@ export class ConnectionController {
   @UserRequired()
   @ValidatePathParam('connectionId', { type: 'number' })
   async deleteConnection(ctx: Context) {
-    const params = ctx.request.params as { connectionId: number };
+    const params = ctx.request.params as { connectionId: number, tenantId: string };
 
     try {
-      await this.prisma.client.connection.delete({
+      await this.db.getClient(params.tenantId).connection.delete({
         where: { id: params.connectionId }
       });
 

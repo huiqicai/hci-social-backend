@@ -5,7 +5,10 @@ Backend/API layer for the UB CSE370 course project
 First install the dependencies:
 - `npm install`
 
-Then if you want to set a custom database URL, API prefix, or listen socket/port, create a file called
+To customize the DB connection strings used for each API tenant, copy `db-tenants.example.json`
+to `db-tenants.json` and fill it out as appropriate.
+
+If you want to set a API prefix or listen socket/port, create a file called
 `.env.local` and set the relevant values, using the defaults set in `.env` as an example.
 
 From there, there are two different ways to start the app

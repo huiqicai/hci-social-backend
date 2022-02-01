@@ -9,7 +9,7 @@ import { Prisma } from '@prisma/client';
 import { PrismaClientKnownRequestError } from '@prisma/client/runtime';
 import { ValidateQuery } from '../../hooks';
 import { JTDDataType } from '../../jtd';
-import { Prisma as PrismaService } from '../../services';
+import { DB } from '../../services';
 import { apiAttributesToPrisma, attributeSchema, userSelectFields } from '../../utils';
 
 const basePostReactionSchema = {
@@ -75,7 +75,7 @@ type ModifyPostReactionSchema = JTDDataType<typeof modifyPostReactionSchema>;
 @ApiUseTag('Post Reaction')
 export class PostReactionController {
   @dependency
-  prisma: PrismaService;
+  db: DB;
 
   @Get()
   @ApiOperationId('findPostReactions')
@@ -88,6 +88,7 @@ export class PostReactionController {
   @ApiResponse(200, { description: 'Returns a list of post reactions.' })
   @ValidateQuery(findPostReactionsSchema)
   async findPostReactions(ctx: Context) {
+    const params = ctx.request.params as {tenantId: string};
     const query = ctx.request.query as FindPostReactionsSchema;
 
     const where: Prisma.PostReactionWhereInput = {
@@ -104,8 +105,8 @@ export class PostReactionController {
       AND: apiAttributesToPrisma(query.attributes)
     };
 
-    const res = await this.prisma.client.$transaction([
-      this.prisma.client.postReaction.findMany({
+    const res = await this.db.getClient(params.tenantId).$transaction([
+      this.db.getClient(params.tenantId).postReaction.findMany({
         include: {
           post: true,
           reactor: {
@@ -116,7 +117,7 @@ export class PostReactionController {
         take: query.take,
         where
       }),
-      this.prisma.client.postReaction.count({where})
+      this.db.getClient(params.tenantId).postReaction.count({where})
     ]);
 
     return new HttpResponseOK(res);
@@ -129,8 +130,8 @@ export class PostReactionController {
   @ApiResponse(200, { description: 'Returns the post reaction.' })
   @ValidatePathParam('postReactionId', { type: 'number' })
   async findPostReactionById(ctx: Context) {
-    const params = ctx.request.params as {postReactionId: number};
-    const postReaction = await this.prisma.client.postReaction.findUnique({
+    const params = ctx.request.params as {postReactionId: number, tenantId: string};
+    const postReaction = await this.db.getClient(params.tenantId).postReaction.findUnique({
       include: {
         post: true,
         reactor: {
@@ -155,11 +156,12 @@ export class PostReactionController {
   @UserRequired()
   @ValidateBody(createPostReactionSchema)
   async createPostReaction(ctx: Context) {
+    const params = ctx.request.params as {tenantId: string};
     const body = ctx.request.body as CreatePostReactionSchema;
     // Due to limitations with our frankensteined AJV JSD/JTD types, we can't type this properly
     const attributes = body.attributes as Prisma.NullableJsonNullValueInput | Prisma.InputJsonValue;
 
-    const postReaction = await this.prisma.client.postReaction.create({
+    const postReaction = await this.db.getClient(params.tenantId).postReaction.create({
       include: {
         post: true,
         reactor: {
@@ -188,13 +190,13 @@ export class PostReactionController {
   @ValidatePathParam('postReactionId', { type: 'number' })
   @ValidateBody(modifyPostReactionSchema)
   async modifyPostReaction(ctx: Context) {
-    const params = ctx.request.params as { postReactionId: number };
+    const params = ctx.request.params as { postReactionId: number, tenantId: string };
     const body = ctx.request.body as ModifyPostReactionSchema;
     // Due to limitations with our frankensteined AJV JSD/JTD types, we can't type this properly
     const attributes = body.attributes as Prisma.NullableJsonNullValueInput | Prisma.InputJsonValue;
 
     try {
-      const postReaction = await this.prisma.client.postReaction.update({
+      const postReaction = await this.db.getClient(params.tenantId).postReaction.update({
         include: {
           post: true,
           reactor: {
@@ -229,10 +231,10 @@ export class PostReactionController {
   @UserRequired()
   @ValidatePathParam('postReactionId', { type: 'number' })
   async deletePostReaction(ctx: Context) {
-    const params = ctx.request.params as { postReactionId: number };
+    const params = ctx.request.params as { postReactionId: number, tenantId: string };
 
     try {
-      await this.prisma.client.postReaction.delete({
+      await this.db.getClient(params.tenantId).postReaction.delete({
         where: { id: params.postReactionId }
       });
 

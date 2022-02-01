@@ -9,7 +9,7 @@ import { Prisma } from '@prisma/client';
 import { PrismaClientKnownRequestError } from '@prisma/client/runtime';
 import { ParseAttributes, ValidateQuery } from '../../hooks';
 import { JTDDataType } from '../../jtd';
-import { Prisma as PrismaService } from '../../services';
+import { DB } from '../../services';
 import { apiAttributesToPrisma, attributeSchema, userSelectFields } from '../../utils';
 
 const baseUserSchema = {
@@ -64,7 +64,7 @@ type ModifyUserSchema = JTDDataType<typeof modifyUserSchema>;
 @ApiUseTag('User')
 export class UserController {
   @dependency
-  prisma: PrismaService
+  db: DB
 
   @Get()
   @ApiOperationId('findUsers')
@@ -78,6 +78,7 @@ export class UserController {
   @ParseAttributes()
   @ValidateQuery(findUsersSchema)
   async findUsers(ctx: Context) {
+    const params = ctx.request.params as {tenantId: string};
     const query = ctx.request.query as FindUsersSchema;
 
     const where: Prisma.UserWhereInput = {
@@ -85,14 +86,14 @@ export class UserController {
       AND: apiAttributesToPrisma(query.attributes)
     };
     
-    const res = await this.prisma.client.$transaction([
-      this.prisma.client.user.findMany({
+    const res = await this.db.getClient(params.tenantId).$transaction([
+      this.db.getClient(params.tenantId).user.findMany({
         select: userSelectFields,
         skip: query.skip,
         take: query.take,
         where
       }),
-      this.prisma.client.user.count({where})
+      this.db.getClient(params.tenantId).user.count({where})
     ])
 
     return new HttpResponseOK(res);
@@ -105,8 +106,8 @@ export class UserController {
   @ApiResponse(200, { description: 'Returns the user.' })
   @ValidatePathParam('userId', { type: 'number' })
   async findUserById(ctx: Context) {
-    const params = ctx.request.params as {userId: number};
-    const user = await this.prisma.client.user.findUnique({
+    const params = ctx.request.params as {userId: number, tenantId: string};
+    const user = await this.db.getClient(params.tenantId).user.findUnique({
       select: userSelectFields,
       where: { id: params.userId }
     });
@@ -126,11 +127,12 @@ export class UserController {
   @UserRequired()
   @ValidateBody(createUserSchema)
   async createUser(ctx: Context) {
+    const params = ctx.request.params as {tenantId: string};
     const body = ctx.request.body as CreateUserSchema;
     // Due to limitations with our frankensteined AJV JSD/JTD types, we can't type this properly
     const attributes = body.attributes as Prisma.NullableJsonNullValueInput | Prisma.InputJsonValue;
 
-    const user = await this.prisma.client.user.create({
+    const user = await this.db.getClient(params.tenantId).user.create({
       select: userSelectFields,
       data: {
         email: body.email,
@@ -152,13 +154,13 @@ export class UserController {
   @ValidatePathParam('userId', { type: 'number' })
   @ValidateBody(modifyUserSchema)
   async modifyUser(ctx: Context) {
-    const params = ctx.request.params as { userId: number };
+    const params = ctx.request.params as { userId: number, tenantId: string };
     const body = ctx.request.body as ModifyUserSchema;
     // Due to limitations with our frankensteined AJV JSD/JTD types, we can't type this properly
     const attributes = body.attributes as Prisma.NullableJsonNullValueInput | Prisma.InputJsonValue;
 
     try {
-      const user = await this.prisma.client.user.update({
+      const user = await this.db.getClient(params.tenantId).user.update({
         select: userSelectFields,
         where: { id: params.userId },
         data: { email: body.email, attributes }
@@ -183,10 +185,10 @@ export class UserController {
   @UserRequired()
   @ValidatePathParam('userId', { type: 'number' })
   async deleteUser(ctx: Context) {
-    const params = ctx.request.params as { userId: number };
+    const params = ctx.request.params as { userId: number, tenantId: string };
 
     try {
-      await this.prisma.client.user.delete({
+      await this.db.getClient(params.tenantId).user.delete({
         where: { id: params.userId }
       });
 

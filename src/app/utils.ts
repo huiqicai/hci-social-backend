@@ -1,14 +1,24 @@
 import { ServiceManager } from '@foal/core';
 import { Prisma } from '@prisma/client';
 import { JTDDataType } from './jtd';
-import { Prisma as PrismaService } from './services/prisma.service';
+import { DB } from './services';
 
 export async function fetchUser(id: number|string, services: ServiceManager) {
-    if (typeof id === 'string') {
-        throw new Error('The user ID must be a number.');
+    if (typeof id !== 'string') {
+        throw new Error('Session user ID malformed - got string');
+    }
+
+    // In the auth controller when we call setUser (and in PrismaSessionStore#read), we set the ID as <tenantId>|<userId>
+    const [tenantId, userIdStr] = id.split('|');
+    if (!tenantId || !userIdStr) {
+      throw new Error('Session user ID malformed - invalid format');
+    }
+    const userId = parseInt(userIdStr);
+    if (isNaN(userId)) {
+      throw new Error('Session user ID malformed - user ID is not a number');
     }
     
-    const user = await services.get(PrismaService).client.user.findFirst({where: { id }});
+    const user = await services.get(DB).getClient(tenantId).user.findFirst({where: { id: userId }});
     if (user === null) return undefined;
     return user;
 }

@@ -7,6 +7,6 @@ const prefix = Config.get('api_prefix', 'string', '');
 export class AppController implements IAppController {
   subControllers = [
     controller(`${prefix}/swagger`, OpenApiController),
-    controller(`${prefix}/api`, ApiController),
+    controller(`${prefix}/api/:tenantId`, ApiController),
   ];
 }

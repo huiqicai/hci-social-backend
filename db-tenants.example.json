@@ -1,0 +1,3 @@
+{
+    "default": "mysql://root@localhost:3306/hci-social"
+}

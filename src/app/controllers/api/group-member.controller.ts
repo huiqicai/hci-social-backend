@@ -9,7 +9,7 @@ import { Prisma } from '@prisma/client';
 import { PrismaClientKnownRequestError } from '@prisma/client/runtime';
 import { ValidateQuery } from '../../hooks';
 import { JTDDataType } from '../../jtd';
-import { Prisma as PrismaService } from '../../services';
+import { DB } from '../../services';
 import { apiAttributesToPrisma, attributeSchema, userSelectFields } from '../../utils';
 
 const baseGroupMemberSchema = {
@@ -59,7 +59,7 @@ type ModifyGroupMemberSchema = JTDDataType<typeof modifyGroupMemberSchema>;
 @ApiUseTag('Group Member')
 export class GroupMemberController {
   @dependency
-  prisma: PrismaService;
+  db: DB;
 
   @Get()
   @ApiOperationId('findGroupMembers')
@@ -72,6 +72,7 @@ export class GroupMemberController {
   @ApiResponse(200, { description: 'Returns a list of group members.' })
   @ValidateQuery(findGroupMembersSchema)
   async findGroupMembers(ctx: Context) {
+    const params = ctx.request.params as {tenantId: string};
     const query = ctx.request.query as FindGroupMembersSchema;
 
     const where: Prisma.GroupMemberWhereInput = {
@@ -80,8 +81,8 @@ export class GroupMemberController {
       AND: apiAttributesToPrisma(query.attributes)
     };
 
-    const res = await this.prisma.client.$transaction([
-      this.prisma.client.groupMember.findMany({
+    const res = await this.db.getClient(params.tenantId).$transaction([
+      this.db.getClient(params.tenantId).groupMember.findMany({
         include: {
           user: {
             select: userSelectFields
@@ -92,7 +93,7 @@ export class GroupMemberController {
         take: query.take,
         where
       }),
-      this.prisma.client.groupMember.count({where})
+      this.db.getClient(params.tenantId).groupMember.count({where})
     ])
     
     return new HttpResponseOK(res);
@@ -105,8 +106,8 @@ export class GroupMemberController {
   @ApiResponse(200, { description: 'Returns the group member.' })
   @ValidatePathParam('groupMemberId', { type: 'number' })
   async findGroupMemberById(ctx: Context) {
-    const params = ctx.request.params as {groupMemberId: number};
-    const groupMember = await this.prisma.client.groupMember.findUnique({
+    const params = ctx.request.params as {groupMemberId: number, tenantId: string};
+    const groupMember = await this.db.getClient(params.tenantId).groupMember.findUnique({
       include: {
         user: {
           select: userSelectFields
@@ -131,11 +132,12 @@ export class GroupMemberController {
   @UserRequired()
   @ValidateBody(createGroupMemberSchema)
   async createGroupMember(ctx: Context) {
+    const params = ctx.request.params as {tenantId: string};
     const body = ctx.request.body as CreateGroupMemberSchema;
     // Due to limitations with our frankensteined AJV JSD/JTD types, we can't type this properly
     const attributes = body.attributes as Prisma.NullableJsonNullValueInput | Prisma.InputJsonValue;
 
-    const groupMember = await this.prisma.client.groupMember.create({
+    const groupMember = await this.db.getClient(params.tenantId).groupMember.create({
       include: {
         user: {
           select: userSelectFields
@@ -161,13 +163,13 @@ export class GroupMemberController {
   @ValidatePathParam('groupMemberId', { type: 'number' })
   @ValidateBody(modifyGroupMemberSchema)
   async modifyGroupMember(ctx: Context) {
-    const params = ctx.request.params as { groupMemberId: number };
+    const params = ctx.request.params as { groupMemberId: number, tenantId: string };
     const body = ctx.request.body as ModifyGroupMemberSchema;
     // Due to limitations with our frankensteined AJV JSD/JTD types, we can't type this properly
     const attributes = body.attributes as Prisma.NullableJsonNullValueInput | Prisma.InputJsonValue;
 
     try {
-      const groupMember = await this.prisma.client.groupMember.update({
+      const groupMember = await this.db.getClient(params.tenantId).groupMember.update({
         include: {
           user: {
             select: userSelectFields
@@ -200,10 +202,10 @@ export class GroupMemberController {
   @UserRequired()
   @ValidatePathParam('groupMemberId', { type: 'number' })
   async deleteGroupMember(ctx: Context) {
-    const params = ctx.request.params as { groupMemberId: number };
+    const params = ctx.request.params as { groupMemberId: number, tenantId: string };
 
     try {
-      await this.prisma.client.groupMember.delete({
+      await this.db.getClient(params.tenantId).groupMember.delete({
         where: { id: params.groupMemberId }
       });
 

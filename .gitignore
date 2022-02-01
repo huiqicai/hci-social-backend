@@ -20,6 +20,7 @@ build
 # Local environment
 .env.local
 .env.*.local
+db-tenants.json
 
 # IDEs
 .vscode/

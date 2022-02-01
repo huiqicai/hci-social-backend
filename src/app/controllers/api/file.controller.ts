@@ -10,7 +10,7 @@ import { Prisma } from '@prisma/client';
 import { PrismaClientKnownRequestError } from '@prisma/client/runtime';
 import { ValidateQuery } from '../../hooks';
 import { JTDDataType } from '../../jtd';
-import { Prisma as PrismaService } from '../../services';
+import { DB } from '../../services';
 import { apiAttributesToPrisma, attributeSchema } from '../../utils';
 
 const extensions = [
@@ -73,7 +73,7 @@ export class FileUploadController {
   disk: Disk
 
   @dependency
-  prisma: PrismaService
+  db: DB
 
   async deleteFileWithPath(fullPath: string) {
     const oldPathMatch = fullPath.match(/\/uploads\/(.*)$/);
@@ -84,10 +84,10 @@ export class FileUploadController {
     }
   }
 
-  async maybeUploadFile(file: FoalFile, fileId?: number): Promise<HttpResponseClientError | { path: string, size: number }> {
+  async maybeUploadFile(tenantId: string, file: FoalFile, fileId?: number): Promise<HttpResponseClientError | { path: string, size: number }> {
     const fileSize = file.buffer.byteLength;
 
-    const res = await this.prisma.client.file.aggregate({
+    const res = await this.db.getClient(tenantId).file.aggregate({
       // If we're replacing an existing file, omit the old file size from the sum, since it will be
       // going away
       where: fileId ? {NOT: {id: fileId}} : {},
@@ -145,6 +145,7 @@ export class FileUploadController {
   @ApiResponse(200, { description: 'Returns a list of files.' })
   @ValidateQuery(findFilesSchema)
   async findFiles(ctx: Context) {
+    const params = ctx.request.params as {tenantId: string};
     const query = ctx.request.query as FindFilesSchema;
 
     const where: Prisma.FileWhereInput = {
@@ -152,13 +153,13 @@ export class FileUploadController {
       AND: apiAttributesToPrisma(query.attributes)
     }
 
-    const res = await this.prisma.client.$transaction([
-      this.prisma.client.file.findMany({
+    const res = await this.db.getClient(params.tenantId).$transaction([
+      this.db.getClient(params.tenantId).file.findMany({
         skip: query.skip,
         take: query.take,
         where
       }),
-      this.prisma.client.file.count({where})
+      this.db.getClient(params.tenantId).file.count({where})
     ]);
 
     return new HttpResponseOK(res);
@@ -171,8 +172,8 @@ export class FileUploadController {
   @ApiResponse(200, { description: 'Returns the file information.' })
   @ValidatePathParam('fileId', { type: 'number' })
   async findFileById(ctx: Context) {
-    const params = ctx.request.params as {fileId: number};
-    const file = await this.prisma.client.file.findUnique({
+    const params = ctx.request.params as {fileId: number, tenantId: string};
+    const file = await this.db.getClient(params.tenantId).file.findUnique({
       where: { id: params.fileId }
     });
 
@@ -203,19 +204,20 @@ export class FileUploadController {
     }
   })
   async uploadFile(ctx: Context) {
+    const params = ctx.request.params as {tenantId: string};
     const body = ctx.request.body as CreateFileSchema & { files: {file: FoalFile} };
     // Due to limitations with our frankensteined AJV JSD/JTD types, we can't type this properly
     const attributes = body.attributes as Prisma.NullableJsonNullValueInput | Prisma.InputJsonValue;
 
     const file = body.files.file;
-    const uploadResult = await this.maybeUploadFile(file);
+    const uploadResult = await this.maybeUploadFile(params.tenantId, file);
 
     if (uploadResult instanceof HttpResponseClientError) {
       return uploadResult;
     }
 
     try {
-      const fileRes = this.prisma.client.file.create({
+      const fileRes = this.db.getClient(params.tenantId).file.create({
         data: {
           uploaderID: body.uploaderID,
           path: uploadResult.path,
@@ -253,7 +255,7 @@ export class FileUploadController {
     }
   })
   async modifyFile(ctx: Context) {
-    const params = ctx.request.params as { fileId: number };
+    const params = ctx.request.params as { fileId: number, tenantId: string };
     const body = ctx.request.body as ModifyFileSchema & { files: {file?: FoalFile} };
     // Due to limitations with our frankensteined AJV JSD/JTD types, we can't type this properly
     const attributes = body.attributes as Prisma.NullableJsonNullValueInput | Prisma.InputJsonValue;
@@ -263,12 +265,12 @@ export class FileUploadController {
     let size: number | undefined;
     let originalPath: string | undefined;
     if (file) {
-      const originalFile = await this.prisma.client.file.findUnique({
+      const originalFile = await this.db.getClient(params.tenantId).file.findUnique({
         select: {path: true},
         where: {id: params.fileId }
       });
       originalPath = originalFile?.path ?? undefined;
-      const uploadResult = await this.maybeUploadFile(file, params.fileId);
+      const uploadResult = await this.maybeUploadFile(params.tenantId, file, params.fileId);
       if (uploadResult instanceof HttpResponseClientError) {
         return uploadResult;
       }
@@ -278,7 +280,7 @@ export class FileUploadController {
 
     let fileRes;
     try {
-      fileRes = await this.prisma.client.file.update({
+      fileRes = await this.db.getClient(params.tenantId).file.update({
         where: { id: params.fileId },
         data: {
           uploaderID: body.uploaderID,
@@ -313,10 +315,10 @@ export class FileUploadController {
   @UserRequired()
   @ValidatePathParam('fileId', { type: 'number' })
   async deleteFile(ctx: Context) {
-    const params = ctx.request.params as { fileId: number };
+    const params = ctx.request.params as { fileId: number, tenantId: string };
 
     try {
-      const res = await this.prisma.client.file.delete({
+      const res = await this.db.getClient(params.tenantId).file.delete({
         select: { path: true },
         where: { id: params.fileId }
       });

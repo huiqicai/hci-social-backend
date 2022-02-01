@@ -1,12 +1,12 @@
 import {
   ApiDefineTag, ApiOperationSummary, ApiResponse, ApiUseTag, Context, createSession, dependency, hashPassword, HttpResponseOK,
-  HttpResponseUnauthorized, Post, Store, UserRequired, ValidateBody, verifyPassword
+  HttpResponseUnauthorized, Post, UserRequired, ValidateBody, verifyPassword
 } from '@foal/core';
 import { PrismaClientKnownRequestError } from '@prisma/client/runtime';
 import { randomBytes } from 'crypto';
 import { JwtPayload, sign, verify, VerifyErrors } from 'jsonwebtoken';
 import { JTDDataType } from '../../jtd';
-import { Mail, Prisma } from '../../services';
+import { Mail, DB, PrismaSessionStore } from '../../services';
 
 const credentialsSchema = {
   type: 'object',
@@ -64,32 +64,33 @@ class InvalidTokenResponse extends HttpResponseUnauthorized {
 @ApiUseTag('Authentication')
 export class AuthController {
   @dependency
-  store: Store;
+  sessionStore: PrismaSessionStore
 
   @dependency
   mail: Mail;
 
   @dependency
-  prisma: Prisma;
+  db: DB;
 
   @Post('/signup')
   @ValidateBody(credentialsSchema)
   async signup(ctx: Context) {
+    const params = ctx.request.params as {tenantId: string};
     const body: Credentials = ctx.request.body as Credentials;
     
     // TODO: Allow setting attributes at signup?
-    const user = await this.prisma.client.user.create({
+    const user = await this.db.getClient(params.tenantId).user.create({
       data: {
         email: body.email,
         password: await hashPassword(body.password)
       }
     })
 
-    ctx.session = await createSession(this.store);
-    ctx.session.setUser(user);
+    ctx.session = await createSession(this.sessionStore);
+    ctx.session.setUser({ id: `${params.tenantId}|${user.id}`});
 
     return new HttpResponseOK({
-      token: ctx.session.getToken(),
+      token: `${params.tenantId}|${ctx.session.getToken()}`,
       userID: user.id
     });
   }
@@ -97,9 +98,11 @@ export class AuthController {
   @Post('/login')
   @ValidateBody(credentialsSchema)
   async login(ctx: Context) {
+    const params = ctx.request.params as {tenantId: string};
     const body: Credentials = ctx.request.body as Credentials;
 
-    const user = await this.prisma.client.user.findUnique({
+    const user = await this.db.getClient(params.tenantId).user.findUnique({
+      select: { id: true, password: true },
       where: { email: body.email }
     })
 
@@ -109,11 +112,11 @@ export class AuthController {
       return new HttpResponseUnauthorized();
     }
 
-    ctx.session = await createSession(this.store);
-    ctx.session.setUser(user);
+    ctx.session = await createSession(this.sessionStore);
+    ctx.session.setUser({ id: `${params.tenantId}|${user.id}`});
 
     return new HttpResponseOK({
-      token: ctx.session.getToken(),
+      token: `${params.tenantId}|${ctx.session.getToken()}`,
       userID: user.id
     });
   }
@@ -140,9 +143,10 @@ export class AuthController {
   @ApiOperationSummary('Send an email to a user with a password reset token if such a user exists')
   @ValidateBody(requestResetSchema)
   async requestOTP(ctx: Context) {
+    const params = ctx.request.params as {tenantId: string};
     const body: ResetRequest = ctx.request.body as ResetRequest;
 
-    const user = await this.prisma.client.user.findUnique({
+    const user = await this.db.getClient(params.tenantId).user.findUnique({
       where: { email: body.email },
       select: { id: true }
     });
@@ -169,6 +173,7 @@ export class AuthController {
   @ApiOperationSummary('Reset a user\'s password using a password reset token')
   @ValidateBody(passwordResetSchema)
   async resetPassword(ctx: Context) {
+    const params = ctx.request.params as {tenantId: string};
     const body: PasswordReset = ctx.request.body as PasswordReset;
 
     const payload: JwtPayload = await new Promise((resolve, reject) => {
@@ -184,7 +189,7 @@ export class AuthController {
     if (!payload.sub) return new InvalidTokenResponse('Invalid user');
 
     try {
-      await this.prisma.client.user.update({
+      await this.db.getClient(params.tenantId).user.update({
         where: { id: parseInt(payload.sub) },
         data: { password: await hashPassword(body.password) }
       });
