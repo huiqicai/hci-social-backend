@@ -8,9 +8,15 @@ import {
 import { Prisma } from '@prisma/client';
 import { PrismaClientKnownRequestError } from '@prisma/client/runtime';
 import { ParseAttributes, ValidateQuery } from '../../hooks';
+import { ValidateQueryParamWithDoc } from '../../hooks/validate-query-param-with-doc';
 import { JTDDataType } from '../../jtd';
 import { DB } from '../../services';
 import { apiAttributesToPrisma, attributeSchema, userSelectFields } from '../../utils';
+
+enum RelatedObjectsAction {
+  DELETE = 'delete',
+  ANONYMIZE = 'anonymize'
+}
 
 const baseUserSchema = {
   type: 'object',
@@ -184,10 +190,30 @@ export class UserController {
   @ApiResponse(204, { description: 'User successfully deleted.' })
   @UserRequired()
   @ValidatePathParam('userId', { type: 'number' })
+  @ValidateQueryParamWithDoc(
+    'relatedObjectsAction', { enum: Object.values(RelatedObjectsAction) }, {
+      required: true,
+      description: 'If set to delete, the following will be deleted (or if anonymize, the user ID will be set to null): '
+        + 'posts where the user is the author, post reactions where the author is the reactor, amd files where the user is the uploader'
+    }
+  )
   async deleteUser(ctx: Context) {
     const params = ctx.request.params as { userId: number, tenantId: string };
+    const query = ctx.request.query as { relatedObjectsAction: RelatedObjectsAction };
 
     try {
+      if (query.relatedObjectsAction === RelatedObjectsAction.DELETE) {
+        await this.db.getClient(params.tenantId).post.deleteMany({
+          where: { authorID: params.userId}
+        });
+        await this.db.getClient(params.tenantId).postReaction.deleteMany({
+          where: { reactorID: params.userId}
+        });
+        await this.db.getClient(params.tenantId).file.deleteMany({
+          where: { uploaderID: params.userId}
+        });
+      }
+
       await this.db.getClient(params.tenantId).user.delete({
         where: { id: params.userId }
       });
