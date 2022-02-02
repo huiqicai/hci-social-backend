@@ -58,7 +58,7 @@ type FindPostReactionsSchema = JTDDataType<typeof findPostReactionsSchema>;
 
 const createPostReactionSchema = {
   ...basePostReactionSchema,
-  required: ['postID', 'userID', 'name']
+  required: ['postID', 'reactorID', 'name']
 } as const;
 
 type CreatePostReactionSchema = JTDDataType<typeof createPostReactionSchema>;
