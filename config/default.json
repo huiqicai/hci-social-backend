@@ -15,7 +15,10 @@
     "multipartRequests": {
       "fileSizeLimit": 10485760
     },
-    "staticPathPrefix": "env(API_PREFIX)"
+    "staticPathPrefix": "env(API_PREFIX)",
+    "ajv": {
+      "coerceTypes": "array"
+    }
   },
   "api_prefix": "env(API_PREFIX)",
   "listen_socket": "env(LISTEN_SOCKET)",

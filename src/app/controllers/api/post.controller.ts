@@ -53,6 +53,11 @@ const findPostsSchema = {
     contentContains: { type: 'string' },
     contentStartsWith: { type: 'string' },
     contentEndsWith: { type: 'string' },
+    authorIDIn: {
+      type: 'array',
+      items: { type: 'number' },
+      description: 'Return will include posts from all of the authors with the passed IDs'
+    },
     attributes: { 
       type: 'array',
       items: { '$ref': '#/components/schemas/attribute' }
@@ -100,9 +105,12 @@ export class PostController {
   async findPosts(ctx: Context) {
     const params = ctx.request.params as {tenantId: string};
     const query = ctx.request.query as FindPostsSchema;
-
+    
     const where: Prisma.PostWhereInput = {
-      authorID: query.authorID,
+      authorID: {
+        equals: query.authorID,
+        in: query.authorIDIn
+      },
       content: {
         equals: query.content,
         contains: query.contentContains,
