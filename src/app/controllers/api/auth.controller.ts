@@ -2,6 +2,7 @@ import {
   ApiDefineTag, ApiOperationSummary, ApiResponse, ApiUseTag, Context, createSession, dependency, hashPassword, HttpResponseOK,
   HttpResponseUnauthorized, Post, UserRequired, ValidateBody, verifyPassword
 } from '@foal/core';
+import { Prisma } from '@prisma/client';
 import { PrismaClientKnownRequestError } from '@prisma/client/runtime';
 import { randomBytes } from 'crypto';
 import { JwtPayload, sign, verify, VerifyErrors } from 'jsonwebtoken';
@@ -19,6 +20,16 @@ const credentialsSchema = {
 } as const;
 
 type Credentials = JTDDataType<typeof credentialsSchema>;
+
+const signupSchema = {
+  ...credentialsSchema,
+  properties: {
+    ...credentialsSchema.properties,
+    attributes: { type: 'object', additionalProperties: true }
+  }
+}
+
+type Signup = JTDDataType<typeof signupSchema>;
 
 const requestResetSchema = {
   type: 'object',
@@ -73,16 +84,19 @@ export class AuthController {
   db: DB;
 
   @Post('/signup')
-  @ValidateBody(credentialsSchema)
+  @ValidateBody(signupSchema)
   async signup(ctx: Context) {
     const params = ctx.request.params as {tenantId: string};
-    const body: Credentials = ctx.request.body as Credentials;
+    const body = ctx.request.body as Signup;
+    // Due to limitations with our frankensteined AJV JSD/JTD types, we can't type this properly
+    const attributes = body.attributes as Prisma.NullableJsonNullValueInput | Prisma.InputJsonValue;
     
     // TODO: Allow setting attributes at signup?
     const user = await this.db.getClient(params.tenantId).user.create({
       data: {
         email: body.email,
-        password: await hashPassword(body.password)
+        password: await hashPassword(body.password),
+        attributes
       }
     })
 
