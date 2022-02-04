@@ -29,7 +29,12 @@ const baseFileSchema = {
   additionalProperties: false,
   properties: {
     uploaderID: { type: 'number' },
-    attributes: { type: 'object', additionalProperties: true }
+    attributes: {
+      type: 'string',
+      additionalProperties: true,
+      description: 'Due to framework limitations, we have to treat this as a string, however the string MUST be able to be parsed with JSON.parse. ' + 
+        'Additionally, due to related limitations, this field is required (for now) - however, you can just set it to an empty object (`{}`)'
+    }
   },
   required: []
 } as const;
@@ -214,7 +219,7 @@ export class FileUploadController {
     const params = ctx.request.params as {tenantId: string};
     const body = ctx.request.body as CreateFileSchema & { files: {file: FoalFile} };
     // Due to limitations with our frankensteined AJV JSD/JTD types, we can't type this properly
-    const attributes = body.attributes as Prisma.NullableJsonNullValueInput | Prisma.InputJsonValue;
+    const attributes = JSON.parse(body.attributes) as Prisma.NullableJsonNullValueInput | Prisma.InputJsonValue;
 
     const file = body.files.file;
     const uploadResult = await this.maybeUploadFile(params.tenantId, file);
@@ -262,7 +267,7 @@ export class FileUploadController {
     const params = ctx.request.params as { fileId: number, tenantId: string };
     const body = ctx.request.body as ModifyFileSchema & { files: {file?: FoalFile} };
     // Due to limitations with our frankensteined AJV JSD/JTD types, we can't type this properly
-    const attributes = body.attributes as Prisma.NullableJsonNullValueInput | Prisma.InputJsonValue;
+    const attributes = JSON.parse(body.attributes) as Prisma.NullableJsonNullValueInput | Prisma.InputJsonValue;
 
     const file = body.files.file;
     let path: string | undefined;
