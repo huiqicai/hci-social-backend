@@ -31,7 +31,7 @@ const baseFileSchema = {
     uploaderID: { type: 'number' },
     attributes: { type: 'object', additionalProperties: true }
   },
-  required: [ 'ownerID' ],
+  required: []
 } as const;
 
 const findFilesSchema = {
@@ -53,15 +53,22 @@ const findFilesSchema = {
 type FindFilesSchema = JTDDataType<typeof findFilesSchema>;
 
 const createFileSchema = {
-  ...baseFileSchema,
-  required: ['uploaderId']
+  ...baseFileSchema.properties
 } as const;
 
-type CreateFileSchema = JTDDataType<typeof createFileSchema>;
+const createFileSchemaForType = {
+  properties: createFileSchema
+}
+type CreateFileSchema = JTDDataType<typeof createFileSchemaForType>;
 
-const modifyFileSchema = baseFileSchema;
+const modifyFileSchema = {
+  ...baseFileSchema.properties
+};
 
-type ModifyFileSchema = JTDDataType<typeof modifyFileSchema>;
+const modifyFileSchemaForType = {
+  properties: createFileSchema
+}
+type ModifyFileSchema = JTDDataType<typeof modifyFileSchemaForType>;
 
 @ApiDefineTag({
   name: 'File Upload',
@@ -237,11 +244,8 @@ export class FileUploadController {
   @ApiOperationId('modifyFile')
   @ApiOperationSummary('Update/modify an existing file.')
   @ApiOperationDescription(
-    'Update/modify an existing file. Note that this endpoint requires the multipart/form-data content type, NOT application/json. ' +
-    'For reference on how to upload files with fetch, see https://developer.mozilla.org/en-US/docs/Web/API/Fetch_API/Using_Fetch#uploading_a_file ' +
-    'There is a limit of 10MB per file, and a total of 100MB of uploads. ' +
-    'Additionally, for security reasons only the following file types are supported: ' +
-    extensions.join(', ')
+    'Update/modify an existing file. Note that due to limitations in our backend library, all fields are required. ' +
+    'This will ideally change in a future version of our API. Please see the POST endpoint for information on the request format and limitations.'
   )
   @ApiResponse(400, { description: 'Invalid file.' })
   @ApiResponse(404, { description: 'File not found.' })
