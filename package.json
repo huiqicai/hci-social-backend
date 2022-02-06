@@ -8,7 +8,7 @@
     "postinstall": "prisma generate",
     "build": "shx rm -rf build && tsc -p tsconfig.app.json",
     "start": "cross-env NODE_ENV=production node ./build/index.js",
-    "develop": "shx mkdir -p public/uploads/user-artifacts && npm run build && concurrently \"tsc -p tsconfig.app.json -w\" \"cross-env NODE_ENV=development supervisor -w ./build --no-restart-on error ./build/index.js\"",
+    "develop": "shx mkdir -p public/uploads/files && npm run build && concurrently \"tsc -p tsconfig.app.json -w\" \"cross-env NODE_ENV=development supervisor -w ./build --no-restart-on error ./build/index.js\"",
     "build:test": "shx rm -rf build && tsc -p tsconfig.test.json",
     "start:test": "cross-env NODE_ENV=test mocha --file ./build/test.js \"./build/**/*.spec.js\"",
     "test": "npm run build:test && concurrently \"tsc -p tsconfig.test.json -w\" \"cross-env NODE_ENV=test mocha --file ./build/test.js -w \\\"./build/**/*.spec.js\\\"\"",

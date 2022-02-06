@@ -217,9 +217,9 @@ export class FileUploadController {
   })
   async uploadFile(ctx: Context) {
     const params = ctx.request.params as {tenantId: string};
-    const body = ctx.request.body as CreateFileSchema & { files: {file: FoalFile} };
+    const body = ctx.request.body as { fields: CreateFileSchema, files: {file: FoalFile} };
     // Due to limitations with our frankensteined AJV JSD/JTD types, we can't type this properly
-    const attributes = JSON.parse(body.attributes) as Prisma.NullableJsonNullValueInput | Prisma.InputJsonValue;
+    const attributes = JSON.parse(body.fields.attributes) as Prisma.NullableJsonNullValueInput | Prisma.InputJsonValue;
 
     const file = body.files.file;
     const uploadResult = await this.maybeUploadFile(params.tenantId, file);
@@ -229,9 +229,9 @@ export class FileUploadController {
     }
 
     try {
-      const fileRes = this.db.getClient(params.tenantId).file.create({
+      const fileRes = await this.db.getClient(params.tenantId).file.create({
         data: {
-          uploaderID: body.uploaderID,
+          uploaderID: body.fields.uploaderID,
           path: uploadResult.path,
           size: uploadResult.size,
           attributes
@@ -265,9 +265,9 @@ export class FileUploadController {
   })
   async modifyFile(ctx: Context) {
     const params = ctx.request.params as { fileId: number, tenantId: string };
-    const body = ctx.request.body as ModifyFileSchema & { files: {file?: FoalFile} };
+    const body = ctx.request.body as { fields: ModifyFileSchema, files: {file?: FoalFile} };
     // Due to limitations with our frankensteined AJV JSD/JTD types, we can't type this properly
-    const attributes = JSON.parse(body.attributes) as Prisma.NullableJsonNullValueInput | Prisma.InputJsonValue;
+    const attributes = JSON.parse(body.fields.attributes) as Prisma.NullableJsonNullValueInput | Prisma.InputJsonValue;
 
     const file = body.files.file;
     let path: string | undefined;
@@ -292,7 +292,7 @@ export class FileUploadController {
       fileRes = await this.db.getClient(params.tenantId).file.update({
         where: { id: params.fileId },
         data: {
-          uploaderID: body.uploaderID,
+          uploaderID: body.fields.uploaderID,
           path,
           size,
           attributes
