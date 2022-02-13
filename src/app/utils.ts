@@ -1,9 +1,11 @@
 import { ServiceManager } from '@foal/core';
-import { Prisma } from '@prisma/client';
+import { Prisma, User } from '@prisma/client';
 import { JTDDataType } from './jtd';
 import { DB } from './services';
 
-export async function fetchUser(id: number|string, services: ServiceManager) {
+export type SessionUser = User | undefined;
+
+export async function fetchUser(id: number|string, services: ServiceManager): Promise<SessionUser> {
     if (typeof id !== 'string') {
         throw new Error('Session user ID malformed - got string');
     }

@@ -11,7 +11,7 @@ import { ParseAttributes, ValidateQuery } from '../../hooks';
 import { ValidateQueryParamWithDoc } from '../../hooks/validate-query-param-with-doc';
 import { JTDDataType } from '../../jtd';
 import { DB } from '../../services';
-import { apiAttributesToPrisma, attributeSchema, userSelectFields } from '../../utils';
+import { apiAttributesToPrisma, attributeSchema, userSelectFields, SessionUser } from '../../utils';
 
 enum RelatedObjectsAction {
   DELETE = 'delete',
@@ -197,10 +197,18 @@ export class UserController {
         + 'posts where the user is the author, post reactions where the author is the reactor, amd files where the user is the uploader'
     }
   )
-  async deleteUser(ctx: Context) {
+  async deleteUser(ctx: Context<SessionUser>) {
     const params = ctx.request.params as { userId: number, tenantId: string };
     const query = ctx.request.query as { relatedObjectsAction: RelatedObjectsAction };
 
+    // If the user being deleted is the one making this request, we need to ensure the session tied with
+    // the current request is destroyed, otherwise when the session is committed at the end of this request,
+    // it would try to commit with the ID of a user which no longer exists, resulting in a foreign key error/violation
+    // when saving to the database (as, again, that ID is invalid and would not point to a valid row)
+    if (ctx.user?.id === params.userId) {
+      await ctx.session?.destroy();
+    }
+    
     try {
       if (query.relatedObjectsAction === RelatedObjectsAction.DELETE) {
         await this.db.getClient(params.tenantId).post.deleteMany({

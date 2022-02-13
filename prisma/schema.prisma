@@ -29,7 +29,7 @@ model User {
 model Session {
   id        String @unique @map("sess_id")
   userID    Int?   @map("sess_user_id")
-  user      User?  @relation(fields: [userID], references: [id], onDelete: Cascade)
+  user      User?  @relation(fields: [userID], references: [id], onDelete: SetNull)
   content   String @map("sess_content") @db.MediumText
   flash     String @map("sess_flash") @db.MediumText
   updatedAt Int    @map("sess_updated_at")
