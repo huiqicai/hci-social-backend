@@ -7,7 +7,7 @@ import {
 } from '@foal/core';
 import { Prisma } from '@prisma/client';
 import { PrismaClientKnownRequestError } from '@prisma/client/runtime';
-import { ValidateQuery } from '../../hooks';
+import { ParseAttributes, ValidateQuery } from '../../hooks';
 import { JTDDataType } from '../../jtd';
 import { DB } from '../../services';
 import { apiAttributesToPrisma, attributeSchema, userSelectFields } from '../../utils';
@@ -70,6 +70,7 @@ export class GroupMemberController {
   )
   @ApiResponse(400, { description: 'Invalid query parameters.' })
   @ApiResponse(200, { description: 'Returns a list of group members.' })
+  @ParseAttributes()
   @ValidateQuery(findGroupMembersSchema)
   async findGroupMembers(ctx: Context) {
     const params = ctx.request.params as {tenantId: string};
