@@ -80,7 +80,7 @@ export class ConnectionController {
 
     const where: Prisma.ConnectionWhereInput = {
       ...(query.toUserID ? {toUserID: query.toUserID} : {}),
-      ...(query.fromUserID ? {fromUserId: query.fromUserID} : {}),
+      ...(query.fromUserID ? {fromUserID: query.fromUserID} : {}),
       ...(query.anyUserID ? { OR: [{toUserID: query.anyUserID}, {fromUserID: query.anyUserID}]} : {}),
       AND: apiAttributesToPrisma(query.attributes)
     };
