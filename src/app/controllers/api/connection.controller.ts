@@ -78,15 +78,10 @@ export class ConnectionController {
     const params = ctx.request.params as {tenantId: string};
     const query = ctx.request.query as FindConnectionsSchema;
 
-    const userIdFilter = (ids: (number | undefined)[]) => {
-      const definedIds = ids.filter((id): id is number => id !== undefined);
-      if (definedIds.length == 0) return undefined;
-      else return {in: definedIds};
-    }
-
     const where: Prisma.ConnectionWhereInput = {
-      toUserID: userIdFilter([query.toUserID, query.anyUserID]),
-      fromUserID: userIdFilter([query.fromUserID, query.anyUserID]),
+      ...(query.toUserID ? {toUserID: query.toUserID} : {}),
+      ...(query.fromUserID ? {fromUserId: query.fromUserID} : {}),
+      ...(query.anyUserID ? { OR: [{toUserID: query.anyUserID}, {fromUserID: query.anyUserID}]} : {}),
       AND: apiAttributesToPrisma(query.attributes)
     };
 
