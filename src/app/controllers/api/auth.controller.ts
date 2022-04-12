@@ -190,15 +190,17 @@ export class AuthController {
     const params = ctx.request.params as {tenantId: string};
     const body: PasswordReset = ctx.request.body as PasswordReset;
 
-    const payload: JwtPayload = await new Promise((resolve, reject) => {
+    const payload: JwtPayload | InvalidTokenResponse = await new Promise((resolve, reject) => {
       verify(body.token, otpSecret, {}, (err: VerifyErrors | null, value: JwtPayload | string | undefined) => {
         if (err || !value || typeof(value) === 'string') {
-          reject(new InvalidTokenResponse(err?.message ?? 'Invalid Token'));
+          resolve(new InvalidTokenResponse(err?.message ?? 'Invalid Token'));
         } else {
           resolve(value);
         }
       });
     });
+
+    if (payload instanceof InvalidTokenResponse) return payload;
 
     if (!payload.sub) return new InvalidTokenResponse('Invalid user');
 
