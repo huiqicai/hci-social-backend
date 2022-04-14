@@ -1,7 +1,7 @@
 import {
   ApiDefineTag,
   ApiOperationDescription, ApiOperationId, ApiOperationSummary, ApiResponse,
-  ApiUseTag, Context, Delete, dependency, Get, HttpResponseCreated,
+  ApiUseTag, Context, Delete, dependency, Get, hashPassword, HttpResponseCreated,
   HttpResponseNoContent, HttpResponseNotFound, HttpResponseOK, Patch, Post,
   UserRequired, ValidateBody, ValidatePathParam
 } from '@foal/core';
@@ -57,7 +57,13 @@ const createUserSchema = {
 
 type CreateUserSchema = JTDDataType<typeof createUserSchema>;
 
-const modifyUserSchema = baseUserSchema;
+const modifyUserSchema = {
+  ...baseUserSchema,
+  properties: {
+    ...baseUserSchema.properties,
+    password: { type: 'string' }
+  }
+} as const;
 
 type ModifyUserSchema = JTDDataType<typeof modifyUserSchema>;
 
@@ -169,7 +175,11 @@ export class UserController {
       const user = await this.db.getClient(params.tenantId).user.update({
         select: userSelectFields,
         where: { id: params.userId },
-        data: { email: body.email, attributes }
+        data: {
+          email: body.email,
+          attributes,
+          password: body.password ? await hashPassword(body.password) : undefined
+        }
       });
   
       return new HttpResponseOK(user);
