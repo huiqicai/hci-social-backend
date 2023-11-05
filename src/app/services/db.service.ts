@@ -1,4 +1,4 @@
-import { PrismaClient } from '@prisma/client';
+import { ChatRoom, ChatRoomMembership, PrismaClient } from '@prisma/client';
 import { existsSync, readFileSync } from 'fs';
 
 interface TenantConnectionConfig {
@@ -51,7 +51,51 @@ export class DB {
             this.clients.set(tenantID, client);
             return client;
         }
-
         throw new Error('Invalid tenant ID');
+    }
+
+
+    // Dans modifications: 
+    // User prisma to create/find the roomID in the database to check if it exists or not
+    async findOrCreateChatRoom(fromUserID: number, toUserID: number): Promise<number> {
+        const client: PrismaClient = this.getClient('default'); 
+        let room: (ChatRoom & { members: ChatRoomMembership[] }) | null;
+    
+        // Attempt to find an existing room with both members
+        room = await client.chatRoom.findFirst({
+            where: {
+                members: {
+                    every: { 
+                        userId: { in: [fromUserID, toUserID] } 
+                    }
+                }
+            },
+            include: {
+                members: true,
+            },
+        });
+        if (!room) {
+            room = await client.chatRoom.create({
+                data: {
+                    members: {
+                        createMany: {
+                            data: [
+                                { userId: fromUserID },
+                                { userId: toUserID },
+                               /// {connectedToSocket: ctx.socket.id}
+                            ],
+                            skipDuplicates: true,
+                        },
+                    },
+                },
+                include: {
+                    members: true, // Include members in the response to validate the creation
+                },
+            });
+        }
+    
+        // At this point, the room should exist and include both members
+        // Return the room's ID
+        return room.id;
     }
 }

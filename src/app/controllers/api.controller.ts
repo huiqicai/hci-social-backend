@@ -28,7 +28,7 @@ export class ApiController {
     controller('/posts', PostController),
     controller('/post-reactions', PostReactionController),
     controller('/groups', GroupController),
-    controller('/group-members', GroupMemberController)
+    controller('/group-members', GroupMemberController),
   ];
 
   @Options('*')

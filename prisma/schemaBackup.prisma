@@ -24,8 +24,6 @@ model User {
   receivedPosts       Post[]         @relation("post_recip_user")
   reactions           PostReaction[]
   uploads             File[]
-  chatRoomMemberships   ChatRoomMembership[]   // Users can be part of many chat rooms
-  messages              Message[]     
 }
 
 model Session {
@@ -100,29 +98,4 @@ model File {
   path       String @map("file_path") @db.Text
   size       Int    @map("file_size")
   attributes Json?  @map("file_attributes")
-}
-
-model ChatRoom {
-  id        Int      @id @default(autoincrement())
-  messages Message[]
-  members  ChatRoomMembership[]
-}
-
-model ChatRoomMembership {
-  chatRoomId            Int
-  userId                Int
-  chatRoom              ChatRoom               @relation(fields: [chatRoomId], references: [id])
-  user                  User                   @relation(fields: [userId], references: [id])
-  connectedToSocket     String                 
-  @@id([userId, chatRoomId])  // Composite primary key
-}
-
-model Message {
-  id                    Int                    @id @default(autoincrement())
-  chatRoomId            Int                    // The chat room this message is associated with
-  fromUserId            Int                    // The user who sent the message
-  content               String
-  createdAt             DateTime               @default(now())
-  chatRoom              ChatRoom               @relation(fields: [chatRoomId], references: [id])
-  fromUser              User                   @relation(fields: [fromUserId], references: [id])
 }
