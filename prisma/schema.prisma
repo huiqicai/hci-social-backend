@@ -113,7 +113,7 @@ model ChatRoomMembership {
   userId                Int
   chatRoom              ChatRoom               @relation(fields: [chatRoomId], references: [id])
   user                  User                   @relation(fields: [userId], references: [id])
-  connectedToSocket     String                 
+  connectedToSocket     String?                @unique                
   @@id([userId, chatRoomId])  // Composite primary key
 }
 
