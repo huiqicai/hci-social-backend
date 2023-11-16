@@ -30,3 +30,4 @@ db-tenants.json
 *.sqlite3
 public/uploads/
 .env
+

@@ -1,12 +1,16 @@
 import { SocketIOController, WebsocketContext, wsController } from '@foal/socket.io';
 import { ChatController } from '../controllers/api/chat.controller'
-
+import { ApiDefineSchema, ApiDefineSecurityScheme, ApiInfo, ApiSecurityRequirement, ApiServer, Config, Hook, ValidatePathParam } from '@foal/core';
+import { DB, PrismaSessionStore } from '../services';
+import { attributeSchema } from '../utils';
 
 // This will be used to help track of socket IDs the clients are being identified as :D 
 const socketSet = new Set<string>();
 const roomSet = new Set<string>();
 export { socketSet };
 export { roomSet };
+
+
 export class WebsocketService extends SocketIOController {
     subControllers = [
         wsController('/chat', ChatController)

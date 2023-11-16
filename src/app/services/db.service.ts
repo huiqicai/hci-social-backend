@@ -1,4 +1,4 @@
-import {  PrismaClient, ChatRoom, ChatRoomMembership } from '@prisma/client';
+import {  PrismaClient, ChatRoom, ChatRoomMembership, Message } from '@prisma/client';
 import { existsSync, readFileSync } from 'fs';
 import { WsServer } from '@foal/socket.io';
 // ChatRoom, ChatRoomMembership,
@@ -57,13 +57,11 @@ export class DB {
 
 
     // Dans modifications: 
-    // User prisma to create/find the roomID in the database to check if it exists or not
+
     async findOrCreateChatRoom(fromUserID: number, toUserID: number): Promise<number> {
         const client: PrismaClient = this.getClient('default'); 
         let room: (ChatRoom & { members: ChatRoomMembership[] }) | null;
-    
-        // Attempt to find an existing room with both members
-        room = await client.chatRoom.findFirst({
+            room = await client.chatRoom.findFirst({
             where: {
                 members: {
                     every: { 
@@ -72,10 +70,9 @@ export class DB {
                 }
             },
             include: {
-                members: true, // Include members to ensure the room is correctly populated
+                members: true,
             },
         });
-        // If a room doesn't exist, create a new one
         if (!room) {
             room = await client.chatRoom.create({
                 data: {
@@ -85,39 +82,37 @@ export class DB {
                                 { userId: fromUserID },
                                 { userId: toUserID },
                             ],
-                            skipDuplicates: true, // This will skip over any duplicates if they exist
+                            skipDuplicates: true,
                         },
                     },
                 },
                 include: {
-                    members: true, // Include members in the response to validate the creation
+                    members: true,
                 },
             });
         }
-        // At this point, the room should exist and include both members
-        // Return the room's ID
         return room.id;
     }
-    
-    
-    
 
-    // async updateSocketIdForUserRooms(userId: number, socketId: string): Promise<void> {
-    //     const client: PrismaClient = this.getClient('default');
-    //     // Update the connectedToSocket for all ChatRoomMemberships for the user
-    //     await client.chatRoomMembership.updateMany({
-    //         where: { userId: userId },
-    //         data: { connectedToSocket: socketId },
-    //     });
-    // }
+    async saveMessage(chatRoomId: number, fromUserId: number, content: string): Promise<Message> {
+        const client: PrismaClient = this.getClient('default'); 
+        const message = await client.message.create({
+            data: {
+                chatRoomId,
+                fromUserId,
+                content,
+            },
+        });
+        return message;
+    }
 
-    // async clearSocketIdForUserRooms(userId: number): Promise<void> {
-    //     const client: PrismaClient = this.getClient('default');
-    //     // Clear the connectedToSocket for all ChatRoomMemberships for the user
-    //     await client.chatRoomMembership.updateMany({
-    //         where: { userId: userId },
-    //         data: { connectedToSocket: { set: "" } }, // Use `set` to explicitly set the value to null
-    //     });
-    // }
-
+    async getChatHistory(roomId: number): Promise<Message[]> {
+        const client: PrismaClient = this.getClient('default'); 
+        const messages = await client.message.findMany({
+            where: { chatRoomId: roomId },
+            orderBy: { createdAt: 'asc' } 
+        });
+        return messages;
+    }
+    
 }

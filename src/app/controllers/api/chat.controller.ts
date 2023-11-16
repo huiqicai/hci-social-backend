@@ -41,16 +41,11 @@ import { roomSet } from "../../services/ws.service";
         try {
             const roomID = await this.getRoomId(fromUserID, toUserID);
             roomSet.add(`${roomID}`);
-            console.log("roomSet", roomSet)
-            console.log("room id is \r\n", roomID)
-            console.log("With users \r\n", fromUserID, toUserID)
             ctx.socket.emit('/room-created', { roomID });
             ctx.socket.join(`${roomID}`);
             
             return new WebsocketResponse(`Room created with ID: ${roomID}`);
         } catch (error) { 
-            // This catch error would never happened because of the findOrCrearteChatRoom function
-            // being able to create a room if it doesn't exist 
             console.error(`Error creating room: ${error}`);
             return new WebsocketErrorResponse(`Error creating room: ${error}`);
         }
@@ -63,12 +58,8 @@ import { roomSet } from "../../services/ws.service";
         const { fromUserID, toUserID, message } = ctx.payload;
         try {
             const roomID = await this.getRoomId(fromUserID, toUserID);
-            // Broadcast the message to the room
-            ctx.socket.to(`${roomID}`).emit('/send-message', {
-                fromUserID,
-                toUserID,
-                message,
-            });
+            await this.db.saveMessage(roomID, fromUserID, message);
+   
             ctx.socket.broadcast.to(`${roomID}`).emit('/send-message', {
                 fromUserID,
                 toUserID,
@@ -81,23 +72,5 @@ import { roomSet } from "../../services/ws.service";
         return new WebsocketErrorResponse("Internal server error.");
         }
     }
-
-    @EventName('/join-room')
-    async joinRoom(ctx: WebsocketContext): Promise<WebsocketResponse | WebsocketErrorResponse> {
-        // Extract user ID and desired room ID from the payload
-        const { userID, roomID } = ctx.payload;
-
-        // Leave previous rooms if any
-        const currentRooms = Array.from(ctx.socket.rooms);
-        currentRooms.forEach((r) => {
-            if (r !== userID.toString()) { // Assuming user's socket ID is used as a room
-                ctx.socket.leave(r);
-            }
-        });
-
-        // Join the new room
-        ctx.socket.join(`${roomID}`);
-        return new WebsocketResponse(`User ${userID} joined room ${roomID}`);
-    }
-
+    
 }
