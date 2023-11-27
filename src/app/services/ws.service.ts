@@ -1,8 +1,6 @@
 import { SocketIOController, WebsocketContext, wsController } from '@foal/socket.io';
 import { ChatController } from '../controllers/api/chat.controller'
-import { ApiDefineSchema, ApiDefineSecurityScheme, ApiInfo, ApiSecurityRequirement, ApiServer, Config, Hook, ValidatePathParam } from '@foal/core';
-import { DB, PrismaSessionStore } from '../services';
-import { attributeSchema } from '../utils';
+
 
 // This will be used to help track of socket IDs the clients are being identified as :D 
 const socketSet = new Set<string>();
@@ -12,26 +10,34 @@ export { roomSet };
 
 
 export class WebsocketService extends SocketIOController {
+
+    constructor() {
+        super();
+        this.options = {
+            cors: {
+                origin: '*', 
+            },
+            path: `/api/hci-socket`
+        }
+    } 
     subControllers = [
         wsController('/chat', ChatController)
     ];
 
-    constructor() {
-        super();
-        // ensure that our realtime server can accept websocket connections from any domain.
-        this.options = {
-            cors: {
-                origin: '*',
-            }
-        }
-    }
-
     async onConnection(ctx: WebsocketContext) {
-        console.log(`${new Date().toISOString()} onConnection`);
-        // General room where evey user is connected to the room
+        const tenantID = ctx.socket.handshake.query.tenantID as string; 
+        console.log(`Tenant ID: ${tenantID}`);    
+        // This will be different for each tenant
+        const tenantRoom = `tenant_${tenantID}-room`;
+
+        ctx.socket.join(tenantRoom);
+        roomSet.add(tenantRoom);
         socketSet.add(ctx.socket.id);
-        console.log("socketSet", socketSet)
         
+        // Denugging purposes: To see if the socket is being added to the roomSet/socketSet
+        console.log("socketSet", socketSet)
+        console.log("roomSet", roomSet)
+
         ctx.socket.on('disconnect', function() {
             console.log(`${new Date().toISOString()} onDisconnection`)
             socketSet.delete(ctx.socket.id);

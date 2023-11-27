@@ -33,6 +33,7 @@
     "@foal/swagger": "^2.8.1",
     "@prisma/client": "^3.10.0",
     "@types/express": "^4.17.13",
+    "@types/socket.io": "^3.0.2",
     "jsonwebtoken": "^8.5.1",
     "nodemailer": "^6.7.2",
     "punycode": "^2.3.1",

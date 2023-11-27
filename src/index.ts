@@ -19,12 +19,12 @@ async function main() {
   if (socket) {
     httpServer.listen(socket, () => {
       console.log(`Listening on socket ${socket}...`);
-      serviceManager.get(WebsocketService).attachHttpServer(httpServer)
+      
     });
   } else {
     const port = Config.getOrThrow('listen_port', 'number');
     httpServer.listen(port, () => {
-      console.log(`Listening on port ${port}...`);
+      console.log(`Listening on port ${port}... =====================>`);
     });
   }
 }
