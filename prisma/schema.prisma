@@ -25,7 +25,8 @@ model User {
   reactions           PostReaction[]
   uploads             File[]
   chatRoomMemberships   ChatRoomMembership[]   // Users can be part of many chat rooms
-  messages              Message[]     
+  sentMessages        Message[]           @relation("MessageFromUser")
+  receivedMessages    Message[]           @relation("MessageToUser")
 }
 
 model Session {
@@ -111,18 +112,20 @@ model ChatRoom {
 model ChatRoomMembership {
   chatRoomId            Int
   userId                Int
-  chatRoom              ChatRoom               @relation(fields: [chatRoomId], references: [id])
-  user                  User                   @relation(fields: [userId], references: [id])
-  connectedToSocket     String?                @unique                
-  @@id([userId, chatRoomId])  // Composite primary key
+  chatRoom              ChatRoom @relation(fields: [chatRoomId], references: [id])
+  user                  User     @relation(fields: [userId], references: [id])
+  @@id([userId, chatRoomId])
 }
 
 model Message {
-  id                    Int                    @id @default(autoincrement())
-  chatRoomId            Int                    // The chat room this message is associated with
-  fromUserId            Int                    // The user who sent the message
-  content               String
-  createdAt             DateTime               @default(now())
-  chatRoom              ChatRoom               @relation(fields: [chatRoomId], references: [id])
-  fromUser              User                   @relation(fields: [fromUserId], references: [id])
+  id           Int      @id @default(autoincrement())
+  chatRoomId   Int      // The chat room this message is associated with
+  fromUserId   Int      // The user who sent the message
+  toUserId     Int?     // The user who is the recipient of the message, optional
+  content      String   // The content of the message
+  createdAt    DateTime @default(now()) // The time the message was sent
+  chatRoom     ChatRoom @relation(fields: [chatRoomId], references: [id])
+   fromUser     User     @relation("MessageFromUser", fields: [fromUserId], references: [id])
+  toUser       User?    @relation("MessageToUser", fields: [toUserId], references: [id])
 }
+

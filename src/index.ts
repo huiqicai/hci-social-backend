@@ -24,7 +24,7 @@ async function main() {
   } else {
     const port = Config.getOrThrow('listen_port', 'number');
     httpServer.listen(port, () => {
-      console.log(`Listening on port ${port}... =====================>`);
+      console.log(`Listening on port ${port}`);
     });
   }
 }

@@ -1,7 +1,6 @@
 import {  PrismaClient, ChatRoom, ChatRoomMembership, Message } from '@prisma/client';
 import { existsSync, readFileSync } from 'fs';
-import { WsServer } from '@foal/socket.io';
-// ChatRoom, ChatRoomMembership,
+
 interface TenantConnectionConfig {
     [tenantID: string]: string | undefined;
 }
@@ -58,20 +57,17 @@ export class DB {
 
     // Dans modifications: 
 
-    async findOrCreateChatRoom(fromUserID: number, toUserID: number): Promise<number> {
-        const client: PrismaClient = this.getClient('default'); 
-        let room: (ChatRoom & { members: ChatRoomMembership[] }) | null;
-            room = await client.chatRoom.findFirst({
+    async findOrCreateChatRoom(tenantID: string, fromUserID: number, toUserID: number): Promise<number> {
+        const client: PrismaClient = this.getClient(tenantID); 
+        let room = await client.chatRoom.findFirst({
             where: {
                 members: {
                     every: { 
-                        userId: { in: [fromUserID, toUserID] } 
+                        userId: { in: [fromUserID, toUserID] }
                     }
                 }
             },
-            include: {
-                members: true,
-            },
+            include: { members: true }
         });
         if (!room) {
             room = await client.chatRoom.create({
@@ -80,39 +76,46 @@ export class DB {
                         createMany: {
                             data: [
                                 { userId: fromUserID },
-                                { userId: toUserID },
+                                { userId: toUserID }
                             ],
-                            skipDuplicates: true,
-                        },
-                    },
+                            skipDuplicates: true
+                        }
+                    }
                 },
-                include: {
-                    members: true,
-                },
+                include: { members: true }
             });
         }
         return room.id;
     }
 
-    async saveMessage(chatRoomId: number, fromUserId: number, content: string): Promise<Message> {
-        const client: PrismaClient = this.getClient('default'); 
-        const message = await client.message.create({
+    async saveMessage(tenantID: string, chatRoomId: number, fromUserId: number, toUserId: number | null, content: string): Promise<Message> {
+        const client: PrismaClient = this.getClient(tenantID); 
+        return await client.message.create({
             data: {
                 chatRoomId,
                 fromUserId,
-                content,
-            },
+                toUserId, 
+                content
+            }
         });
-        return message;
     }
 
-    async getChatHistory(roomId: number): Promise<Message[]> {
-        const client: PrismaClient = this.getClient('default'); 
-        const messages = await client.message.findMany({
-            where: { chatRoomId: roomId },
-            orderBy: { createdAt: 'asc' } 
-        });
-        return messages;
-    }
     
+    async getChatHistory(tenantID: string, roomId: number): Promise<Message[]> {
+        // First, get the PrismaClient for the given tenantID
+        const client: PrismaClient = this.getClient(tenantID);
+        try {
+            console.log("----------------------------", tenantID)
+            // Then, use that client to query the database
+            const messages = await client.message.findMany({
+                where: { chatRoomId: roomId },
+                orderBy: { createdAt: 'asc' }, // Sort by createdAt in ascending order
+            });
+            return messages;
+        } catch (error) {
+            console.error(`Failed to fetch chat history for tenantID ${tenantID}:`, error);
+            // Rethrow the error or handle it as needed
+            throw error;
+        }
+    }
 }

@@ -1,49 +1,50 @@
 import { EventName, WebsocketContext, WebsocketResponse, WebsocketErrorResponse, ValidatePayload } from "@foal/socket.io";
 import { dependency } from "@foal/core";
 import { DB } from "../../services";
-import { roomSet } from "../../services/ws.service";
 
-
-    export class ChatController {
-    
+export class ChatController {
     @dependency
     db: DB;
-
 
     createRoomSchema = {
         additionalProperties: false,
         properties: {
             fromUserID: { type: 'integer', minimum: 1 },
-            toUserID: { type: 'integer', minimum: 1 },
+            toUserID: { type: 'integer', minimum: 1 }
         },
         required: ['fromUserID', 'toUserID'],
         type: 'object'
     };
+    
     sendMessageSchema = {
         additionalProperties: false,
         properties: {
-        fromUserID: { type: 'integer', minimum: 1 }, // Sender's User ID
-        toUserID: { type: 'integer', minimum: 1 },   // Recipient's User ID
-        message: { type: 'string', minLength: 1 },
+            fromUserID: { type: 'integer', minimum: 1 },
+            toUserID: { type: 'integer', minimum: 1 },
+            message: { type: 'string', minLength: 1 }
         },
-        required: ['fromUserID', 'toUserID','message'],
+        required: ['fromUserID', 'toUserID', 'message'],
         type: 'object'
     };
 
-    async getRoomId(fromUserID: number, toUserID: number): Promise<number> {
-        return await this.db.findOrCreateChatRoom(fromUserID, toUserID);
-    }
+    chatHistorySchema = {
+        additionalProperties: false,
+        properties: {
+            roomId: { type: 'integer', minimum: 1 }
+        },
+        required: ['roomId'],
+        type: 'object'
+    };
 
     @EventName('/create-room')
     @ValidatePayload(ChatController => ChatController.createRoomSchema)
     async createRoom(ctx: WebsocketContext): Promise<WebsocketResponse | WebsocketErrorResponse> {
+        const tenantID = ctx.socket['tenantID'] as string;
         const { fromUserID, toUserID } = ctx.payload;
         try {
-            const roomID = await this.getRoomId(fromUserID, toUserID);
-            roomSet.add(`${roomID}`);
+            const roomID = await this.db.findOrCreateChatRoom(tenantID, fromUserID, toUserID);
             ctx.socket.emit('/room-created', { roomID });
-            ctx.socket.join(`${roomID}`);
-            
+            ctx.socket.join(`room_${roomID}`);
             return new WebsocketResponse(`Room created with ID: ${roomID}`);
         } catch (error) { 
             console.error(`Error creating room: ${error}`);
@@ -54,23 +55,22 @@ import { roomSet } from "../../services/ws.service";
     @EventName('/send')
     @ValidatePayload(ChatController => ChatController.sendMessageSchema)
     async sendMessage(ctx: WebsocketContext): Promise<WebsocketResponse | WebsocketErrorResponse> {
-        console.log("------------------------", ctx.payload)
+        const tenantID = ctx.socket['tenantID'] as string;
         const { fromUserID, toUserID, message } = ctx.payload;
         try {
-            const roomID = await this.getRoomId(fromUserID, toUserID);
-            await this.db.saveMessage(roomID, fromUserID, message);
-   
-            ctx.socket.broadcast.to(`${roomID}`).emit('/send-message', {
-                fromUserID,
-                toUserID,
-                message,
-            });
-            return new WebsocketResponse("Message sent successfully!");
+            const roomID = await this.db.findOrCreateChatRoom(tenantID, fromUserID, toUserID);
+            await this.db.saveMessage(tenantID, roomID, fromUserID, toUserID, message);
             
-    } catch (error) {
-        console.error("Error in sendMessage:", error);
-        return new WebsocketErrorResponse("Internal server error.");
+            ctx.socket.broadcast.to(`${roomID}`).emit('/send-message', {
+                fromUserID, 
+                toUserID, 
+                message 
+            });
+
+            return new WebsocketResponse("Message sent successfully!");
+        } catch (error) {
+            console.error("Error in sendMessage:", error);
+            return new WebsocketErrorResponse("Internal server error.");
         }
     }
-    
 }
