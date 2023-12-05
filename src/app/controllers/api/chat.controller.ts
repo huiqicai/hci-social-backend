@@ -27,15 +27,6 @@ export class ChatController {
         type: 'object'
     };
 
-    chatHistorySchema = {
-        additionalProperties: false,
-        properties: {
-            roomId: { type: 'integer', minimum: 1 }
-        },
-        required: ['roomId'],
-        type: 'object'
-    };
-
     @EventName('/create-room')
     @ValidatePayload(ChatController => ChatController.createRoomSchema)
     async createRoom(ctx: WebsocketContext): Promise<WebsocketResponse | WebsocketErrorResponse> {
@@ -61,11 +52,18 @@ export class ChatController {
             const roomID = await this.db.findOrCreateChatRoom(tenantID, fromUserID, toUserID);
             await this.db.saveMessage(tenantID, roomID, fromUserID, toUserID, message);
             
-            ctx.socket.broadcast.to(`${roomID}`).emit('/send-message', {
+            // ctx.socket.broadcast.to(`${roomID}`).emit('/send-message', {
+            //     fromUserID, 
+            //     toUserID, 
+            //     message 
+            // });
+                        // On your backend inside the sendMessage function
+            ctx.socket.broadcast.to(`room_${roomID}`).emit('/send-message', { 
                 fromUserID, 
                 toUserID, 
                 message 
             });
+
 
             return new WebsocketResponse("Message sent successfully!");
         } catch (error) {
