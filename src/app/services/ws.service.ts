@@ -17,7 +17,7 @@ export class WebsocketService extends SocketIOController {
                 origin: '*', 
             },
             // This is the path that the client will use to connect to the websocket
-            path: `${prefix}/ws/hci-rtc-socket`
+            path: `${prefix}/api/hci-socket`
         }
 
     } 

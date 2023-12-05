@@ -4,8 +4,9 @@ import { Message } from '@prisma/client';
 
 @ApiDefineTag({
     name: 'Chat-History',
-    description: 'This dataset will hold all of the chat messages between users.'
+    description: "Endpoint for fetching chat history"
 })
+
 @ApiUseTag('Chat-History')
 export class ChatHistoryController {
     @dependency

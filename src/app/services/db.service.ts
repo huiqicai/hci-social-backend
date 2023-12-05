@@ -1,4 +1,4 @@
-import {  PrismaClient, ChatRoom, ChatRoomMembership, Message } from '@prisma/client';
+import {  PrismaClient, Message } from '@prisma/client';
 import { existsSync, readFileSync } from 'fs';
 
 interface TenantConnectionConfig {
@@ -38,7 +38,6 @@ export class DB {
     getClient(tenantID: string): PrismaClient {
         const existingClient = this.clients.get(tenantID);
         if (existingClient) return existingClient;
-        
         const connectionString = this.tenantDBConnectionConfig[tenantID];
         if (connectionString) {
             const client = new PrismaClient({
@@ -54,9 +53,7 @@ export class DB {
         throw new Error('Invalid tenant ID');
     }
 
-
     // Dans modifications: 
-
     async findOrCreateChatRoom(tenantID: string, fromUserID: number, toUserID: number): Promise<number> {
         const client: PrismaClient = this.getClient(tenantID); 
         let room = await client.chatRoom.findFirst({
@@ -88,6 +85,7 @@ export class DB {
         return room.id;
     }
 
+
     async saveMessage(tenantID: string, chatRoomId: number, fromUserId: number, toUserId: number | null, content: string): Promise<Message> {
         const client: PrismaClient = this.getClient(tenantID); 
         return await client.message.create({
@@ -100,22 +98,18 @@ export class DB {
         });
     }
 
-    
     async getChatHistory(tenantID: string, roomId: number): Promise<Message[]> {
-        // First, get the PrismaClient for the given tenantID
         const client: PrismaClient = this.getClient(tenantID);
         try {
-            console.log("----------------------------", tenantID)
-            // Then, use that client to query the database
             const messages = await client.message.findMany({
                 where: { chatRoomId: roomId },
-                orderBy: { createdAt: 'asc' }, // Sort by createdAt in ascending order
+                orderBy: { createdAt: 'asc' }, 
             });
             return messages;
         } catch (error) {
-            console.error(`Failed to fetch chat history for tenantID ${tenantID}:`, error);
-            // Rethrow the error or handle it as needed
+            
             throw error;
         }
     }
+    
 }
