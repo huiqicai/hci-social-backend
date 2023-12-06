@@ -49,15 +49,10 @@ export class ChatController {
         const tenantID = ctx.socket['tenantID'] as string;
         const { fromUserID, toUserID, message } = ctx.payload;
         try {
+            
             const roomID = await this.db.findOrCreateChatRoom(tenantID, fromUserID, toUserID);
             await this.db.saveMessage(tenantID, roomID, fromUserID, toUserID, message);
-            
-            // ctx.socket.broadcast.to(`${roomID}`).emit('/send-message', {
-            //     fromUserID, 
-            //     toUserID, 
-            //     message 
-            // });
-                        // On your backend inside the sendMessage function
+
             ctx.socket.broadcast.to(`room_${roomID}`).emit('/send-message', { 
                 fromUserID, 
                 toUserID, 

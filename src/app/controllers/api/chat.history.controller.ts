@@ -1,10 +1,10 @@
-import { ApiDefineTag, ApiUseTag, Get, ValidatePathParam, Context, dependency, HttpResponse,  HttpResponseOK } from '@foal/core';
+import { ApiDefineTag, ApiUseTag, Get, ValidatePathParam, Context, dependency, HttpResponse,  HttpResponseOK, ApiResponse } from '@foal/core';
 import { DB } from '../../services'; 
 import { Message } from '@prisma/client'; 
 
 @ApiDefineTag({
     name: 'Chat-History',
-    description: "Endpoint for fetching chat history"
+    description: "This endpoint is for fetching chat history for a given room"
 })
 
 @ApiUseTag('Chat-History')
@@ -14,6 +14,7 @@ export class ChatHistoryController {
     
     @Get('/history/:roomId')
     @ValidatePathParam('roomId', { type: 'number' })
+    @ApiResponse(200, {description: "Returns the chat-history"})
     async getChatHistory(ctx: Context): Promise<HttpResponseOK> {
         const tenantID = "default";
         const roomId = ctx.request.params.roomId as number;
