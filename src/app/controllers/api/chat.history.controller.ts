@@ -16,9 +16,9 @@ export class ChatHistoryController {
     @ValidatePathParam('roomId', { type: 'number' })
     @ApiResponse(200, {description: "Returns the chat-history"})
     async getChatHistory(ctx: Context): Promise<HttpResponseOK> {
-        const tenantID = "default";
+        const params = ctx.request.params as { tenantId: string}
         const roomId = ctx.request.params.roomId as number;
-        const messages = await this.db.getChatHistory(tenantID, roomId);
+        const messages = await this.db.getChatHistory(params.tenantId, roomId);
         return new HttpResponseOK(messages);
     }
 }
