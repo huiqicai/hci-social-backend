@@ -1,4 +1,4 @@
-import {  PrismaClient, Message } from '@prisma/client';
+import {  PrismaClient, Message, ChatRoom, ChatRoomMembership } from '@prisma/client';
 import { existsSync, readFileSync } from 'fs';
 
 interface TenantConnectionConfig {
@@ -52,64 +52,6 @@ export class DB {
         }
         throw new Error('Invalid tenant ID');
     }
-
-    // Dans modifications: 
-    async findOrCreateChatRoom(tenantID: string, fromUserID: number, toUserID: number): Promise<number> {
-        const client: PrismaClient = this.getClient(tenantID); 
-        let room = await client.chatRoom.findFirst({
-            where: {
-                members: {
-                    every: { 
-                        userId: { in: [fromUserID, toUserID] }
-                    }
-                }
-            },
-            include: { members: true }
-        });
-        if (!room) {
-            room = await client.chatRoom.create({
-                data: {
-                    members: {
-                        createMany: {
-                            data: [
-                                { userId: fromUserID },
-                                { userId: toUserID }
-                            ],
-                            skipDuplicates: true
-                        }
-                    }
-                },
-                include: { members: true }
-            });
-        }
-        return room.id;
-    }
-
-
-    async saveMessage(tenantID: string, chatRoomId: number, fromUserId: number, toUserId: number | null, content: string): Promise<Message> {
-        const client: PrismaClient = this.getClient(tenantID); 
-        return await client.message.create({
-            data: {
-                chatRoomId,
-                fromUserId,
-                toUserId, 
-                content
-            }
-        });
-    }
-
-    async getChatHistory(tenantID: string, roomId: number): Promise<Message[]> {
-        const client: PrismaClient = this.getClient(tenantID);
-        try {
-            const messages = await client.message.findMany({
-                where: { chatRoomId: roomId },
-                orderBy: { createdAt: 'asc' }, 
-            });
-            return messages;
-        } catch (error) {
-            
-            throw error;
-        }
-    }
     
 }
+

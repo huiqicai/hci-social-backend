@@ -11,7 +11,7 @@ export class WebsocketService extends SocketIOController {
             cors: {
                 origin: '*', 
             },
-            path: `${prefix}/api/hci-socket`
+            path: `${prefix}/realtime-socket`
         }
 
     } 
@@ -26,8 +26,7 @@ export class WebsocketService extends SocketIOController {
         ctx.socket.join(tenantRoom);
 
         ctx.socket.on('disconnect', function() {
-            console.log(`${new Date().toISOString()} onDisconnection`)
+            ctx.socket.leave(tenantRoom);
         });
     }
 }
-

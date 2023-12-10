@@ -12,21 +12,21 @@ datasource db {
 }
 
 model User {
-  id                  Int            @id @default(autoincrement()) @map("user_id")
-  email               String         @unique @map("user_email")
-  password            String         @map("user_password")
-  attributes          Json?          @map("user_attributes")
+  id                  Int                  @id @default(autoincrement()) @map("user_id")
+  email               String               @unique @map("user_email")
+  password            String               @map("user_password")
+  attributes          Json?                @map("user_attributes")
   sessions            Session[]
-  outgoingConnections Connection[]   @relation("conn_outgoing_connections")
-  incomingConnections Connection[]   @relation("conn_incoming_connections")
+  outgoingConnections Connection[]         @relation("conn_outgoing_connections")
+  incomingConnections Connection[]         @relation("conn_incoming_connections")
   groupMemberships    GroupMember[]
-  posts               Post[]         @relation("post_author")
-  receivedPosts       Post[]         @relation("post_recip_user")
+  posts               Post[]               @relation("post_author")
+  receivedPosts       Post[]               @relation("post_recip_user")
   reactions           PostReaction[]
   uploads             File[]
-  chatRoomMemberships   ChatRoomMembership[]   // Users can be part of many chat rooms
-  sentMessages        Message[]           @relation("MessageFromUser")
-  receivedMessages    Message[]           @relation("MessageToUser")
+  chatRoomMemberships ChatRoomMembership[] // Users can be part of many chat rooms
+  sentMessages        Message[]            @relation("MessageFromUser")
+  receivedMessages    Message[]            @relation("MessageToUser")
 }
 
 model Session {
@@ -104,28 +104,29 @@ model File {
 }
 
 model ChatRoom {
-  id        Int      @id @default(autoincrement())
+  id       Int                  @id @default(autoincrement())
   messages Message[]
   members  ChatRoomMembership[]
 }
 
 model ChatRoomMembership {
-  chatRoomId            Int
-  userId                Int
-  chatRoom              ChatRoom @relation(fields: [chatRoomId], references: [id])
-  user                  User     @relation(fields: [userId], references: [id])
+  chatRoomId Int
+  userId     Int
+  chatRoom   ChatRoom @relation(fields: [chatRoomId], references: [id])
+  user       User     @relation(fields: [userId], references: [id])
+
   @@id([userId, chatRoomId])
 }
 
 model Message {
-  id           Int      @id @default(autoincrement())
-  chatRoomId   Int      // The chat room this message is associated with
-  fromUserId   Int      // The user who sent the message
-  toUserId     Int?     // The user who is the recipient of the message, optional
-  content      String   // The content of the message
-  createdAt    DateTime @default(now()) // The time the message was sent
-  chatRoom     ChatRoom @relation(fields: [chatRoomId], references: [id])
-   fromUser     User     @relation("MessageFromUser", fields: [fromUserId], references: [id])
-  toUser       User?    @relation("MessageToUser", fields: [toUserId], references: [id])
+  id         Int      @id @default(autoincrement())
+  chatRoomId Int // The chat room this message is associated with
+  fromUserId Int // The user who sent the message
+  toUserId   Int? // The user who is the recipient of the message, optional
+  content    String // The content of the message
+  createdAt  DateTime @default(now()) // The time the message was sent
+  chatRoom   ChatRoom @relation(fields: [chatRoomId], references: [id])
+  fromUser   User     @relation("MessageFromUser", fields: [fromUserId], references: [id])
+  toUser     User?    @relation("MessageToUser", fields: [toUserId], references: [id])
 }
 

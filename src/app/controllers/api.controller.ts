@@ -29,7 +29,7 @@ export class ApiController {
     controller('/post-reactions', PostReactionController),
     controller('/groups', GroupController),
     controller('/group-members', GroupMemberController),
-    controller("/chat-history", ChatHistoryController),
+    controller('/chat-history', ChatHistoryController),
   ];
 
   @Options('*')

@@ -158,9 +158,7 @@ export class AuthController {
   @ValidateBody(requestResetSchema)
   async requestOTP(ctx: Context) {
     const params = ctx.request.params as {tenantId: string};
-    console.log(params , "-------------------")
     const body: ResetRequest = ctx.request.body as ResetRequest;
-
     const user = await this.db.getClient(params.tenantId).user.findUnique({
       where: { email: body.email },
       select: { id: true }

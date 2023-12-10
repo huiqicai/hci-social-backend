@@ -26,7 +26,6 @@
     "node": ">=10"
   },
   "dependencies": {
-    "-": "^0.0.1",
     "@foal/core": "^2.8.1",
     "@foal/socket.io": "^4.2.0",
     "@foal/storage": "^2.8.1",
@@ -36,7 +35,6 @@
     "@types/socket.io": "^3.0.2",
     "jsonwebtoken": "^8.5.1",
     "nodemailer": "^6.7.2",
-    "punycode": "^2.3.1",
     "shelljs": "^0.8.5",
     "source-map-support": "~0.5.21"
   },
