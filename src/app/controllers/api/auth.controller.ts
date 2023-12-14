@@ -159,7 +159,6 @@ export class AuthController {
   async requestOTP(ctx: Context) {
     const params = ctx.request.params as {tenantId: string};
     const body: ResetRequest = ctx.request.body as ResetRequest;
-
     const user = await this.db.getClient(params.tenantId).user.findUnique({
       where: { email: body.email },
       select: { id: true }
@@ -188,6 +187,7 @@ export class AuthController {
   @ValidateBody(passwordResetSchema)
   async resetPassword(ctx: Context) {
     const params = ctx.request.params as {tenantId: string};
+   
     const body: PasswordReset = ctx.request.body as PasswordReset;
 
     const payload: JwtPayload | InvalidTokenResponse = await new Promise((resolve, reject) => {

@@ -29,3 +29,5 @@ db-tenants.json
 # Data
 *.sqlite3
 public/uploads/
+
+

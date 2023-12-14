@@ -1,4 +1,4 @@
-import { PrismaClient } from '@prisma/client';
+import {  PrismaClient, Message, ChatRoom, ChatRoomMembership } from '@prisma/client';
 import { existsSync, readFileSync } from 'fs';
 
 interface TenantConnectionConfig {
@@ -38,7 +38,6 @@ export class DB {
     getClient(tenantID: string): PrismaClient {
         const existingClient = this.clients.get(tenantID);
         if (existingClient) return existingClient;
-        
         const connectionString = this.tenantDBConnectionConfig[tenantID];
         if (connectionString) {
             const client = new PrismaClient({
@@ -51,7 +50,8 @@ export class DB {
             this.clients.set(tenantID, client);
             return client;
         }
-
         throw new Error('Invalid tenant ID');
     }
+    
 }
+

@@ -1,5 +1,5 @@
 import { ApiDefineSchema, ApiDefineSecurityScheme, ApiInfo, ApiSecurityRequirement, ApiServer, Config, Context, controller, Hook, HttpResponseNoContent, Options, UseSessions, ValidatePathParam } from '@foal/core';
-import { ConnectionController, GroupController, GroupMemberController, PostController, PostReactionController, FileUploadController } from './api';
+import { ConnectionController, GroupController, GroupMemberController, PostController, PostReactionController, FileUploadController, ChatHistoryController } from './api';
 import { AuthController } from './api/auth.controller';
 import { UserController } from './api/user.controller';
 import { attributeSchema, fetchUser } from '../utils';
@@ -28,7 +28,8 @@ export class ApiController {
     controller('/posts', PostController),
     controller('/post-reactions', PostReactionController),
     controller('/groups', GroupController),
-    controller('/group-members', GroupMemberController)
+    controller('/group-members', GroupMemberController),
+    controller('/chat-history', ChatHistoryController),
   ];
 
   @Options('*')
