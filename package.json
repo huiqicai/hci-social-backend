@@ -23,7 +23,7 @@
     "migrate": "npm run build && npx foal run migrate"
   },
   "engines": {
-    "node": ">=10"
+    "node": ">=18"
   },
   "dependencies": {
     "@foal/core": "^2.8.1",
