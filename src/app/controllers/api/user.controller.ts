@@ -230,11 +230,13 @@ export class UserController {
         await this.db.getClient(params.tenantId).file.deleteMany({
           where: { uploaderID: params.userId }
         });
-        // Added deletion of chat room memberships
+
+        // This deletes the chat room memberships 
         await this.db.getClient(params.tenantId).chatRoomMembership.deleteMany({
-          where: { userId: params.userId }
+          where: { userId: params.userId } // Passing in the user ID 
         });
-        // Added deletion of messages sent by the user
+
+        // This delete s the messages sent by the user 
         await this.db.getClient(params.tenantId).message.deleteMany({
           where: { fromUserId: params.userId }
         });

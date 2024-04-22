@@ -127,7 +127,6 @@ export class ChatController {
         }
         return room.id;
     }
-
     async saveMessage(tenantID: string, chatRoomId: number, fromUserId: number, toUserId: number | null, content: string): Promise<Message> {
         const client: PrismaClient = this.db.getClient(tenantID);
         return await client.message.create({
@@ -140,8 +139,8 @@ export class ChatController {
         });
     }
 
+    // NOTE for next years backend developer: 
+    // Cool feature to add is a group chat functionality: 
+    // Might need to add a few more things to the chat room memebership and  chat room prisma tables to allow more users to join a room 
+    // GOOD LUCK ;) 
 }
-
-
-// get surveys 
-// call 
