@@ -34,6 +34,7 @@ export class ChatController {
         const tenantID = ctx.socket['tenantID'] as string;
         const { fromUserID, toUserID } = ctx.payload;
         try {
+            console.log(tenantID, fromUserID, toUserID)
             const roomID = await this.findOrCreateChatRoom(tenantID, fromUserID, toUserID);
             ctx.socket.emit('/room-created', { roomID });
             ctx.socket.join(`room_${roomID}`);
@@ -48,6 +49,7 @@ export class ChatController {
     @ValidatePayload(ChatController => ChatController.sendMessageSchema)
     async sendMessage(ctx: WebsocketContext): Promise<WebsocketResponse | WebsocketErrorResponse> {
         const tenantID = ctx.socket['tenantID'] as string;
+        console.log(tenantID, "--------------")
         const { fromUserID, toUserID, message } = ctx.payload;
         try {
             const roomID = await this.findOrCreateChatRoom(tenantID, fromUserID, toUserID);
@@ -138,5 +140,8 @@ export class ChatController {
         });
     }
 
-
 }
+
+
+// get surveys 
+// call 
