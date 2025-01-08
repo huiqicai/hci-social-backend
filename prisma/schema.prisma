@@ -27,6 +27,7 @@ model User {
   chatRoomMemberships ChatRoomMembership[] // Users can be part of many chat rooms
   sentMessages        Message[]            @relation("MessageFromUser")
   receivedMessages    Message[]            @relation("MessageToUser")
+  badges              UserBadge[]          
 }
 
 model Session {
@@ -130,3 +131,17 @@ model Message {
   toUser     User?    @relation("MessageToUser", fields: [toUserId], references: [id])
 }
 
+model Badge {
+  id            Int           @id @default(autoincrement()) @map("badge_id")
+  name          String        @map("badge_name")
+  attributes    Json?         @map("badge_attributes")
+  users         UserBadge[]
+}
+
+model UserBadge {
+  id        Int    @id @default(autoincrement()) @map("ub_id")
+  userID    Int?    @map("user_id")
+  user      User?   @relation(fields: [userID], references: [id], onDelete: SetNull)
+  badgeID   Int?    @map("badge_id")
+  badge     Badge?  @relation(fields: [badgeID], references: [id], onDelete: SetNull)
+}

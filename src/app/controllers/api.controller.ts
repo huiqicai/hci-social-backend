@@ -2,6 +2,9 @@ import { ApiDefineSchema, ApiDefineSecurityScheme, ApiInfo, ApiSecurityRequireme
 import { ConnectionController, GroupController, GroupMemberController, PostController, PostReactionController, FileUploadController, ChatHistoryController } from './api';
 import { AuthController } from './api/auth.controller';
 import { UserController } from './api/user.controller';
+import { BadgeController } from './api/badge.controller';
+import { UserBadgeController } from './api/user-badge.controller';
+
 import { attributeSchema, fetchUser } from '../utils';
 import { DB, PrismaSessionStore } from '../services';
 
@@ -30,6 +33,8 @@ export class ApiController {
     controller('/groups', GroupController),
     controller('/group-members', GroupMemberController),
     controller('/chat-history', ChatHistoryController),
+    controller('/badge', BadgeController),
+    controller('/user-badge', UserBadgeController),
   ];
 
   @Options('*')
