@@ -1,0 +1,15 @@
+services:
+  api:
+    build:
+      context: .
+    ports:
+      - "8371:3001"
+    restart: unless-stopped
+  db: # db:3306 is the connection url
+    image: mysql:latest
+    restart: always
+    # environment:
+    #   MYSQL_ROOT_PASSWORD: pw # must dcdown to change the password
+    #   MYSQL_DATABASE: recipepantry_db # db name
+    ports: # not sure if I need this
+      - "3306:3306"
