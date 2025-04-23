@@ -7,7 +7,6 @@ import {
 } from '@foal/core';
 import { Disk, File as FoalFile, ValidateMultipartFormDataBody } from '@foal/storage';
 import { Prisma } from '@prisma/client';
-import { PrismaClientKnownRequestError } from '@prisma/client/runtime';
 import { ParseAttributes, ValidateQuery } from '../../hooks';
 import { JTDDataType } from '../../jtd';
 import { DB } from '../../services';
@@ -303,7 +302,7 @@ export class FileUploadController {
       // We failed to save the file, so to prevent leaking disk usage, we'll clean up the orphaned upload
       if (path) await this.deleteFileWithPath(path);
 
-      if (e instanceof PrismaClientKnownRequestError) {
+      if (e instanceof Prisma.PrismaClientKnownRequestError) {
         // Record to update not found
         if (e.code === 'P2025') return new HttpResponseNotFound();
       }
@@ -336,7 +335,7 @@ export class FileUploadController {
 
       return new HttpResponseNoContent();
     } catch(e) {
-      if (e instanceof PrismaClientKnownRequestError) {
+      if (e instanceof Prisma.PrismaClientKnownRequestError) {
         // Record to delete not found
         if (e.code === 'P2025') return new HttpResponseNotFound();
       }

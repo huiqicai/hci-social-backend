@@ -1,5 +1,5 @@
 import { dependency, SessionAlreadyExists, SessionState, SessionStore } from '@foal/core';
-import { PrismaClientKnownRequestError } from '@prisma/client/runtime';
+import { Prisma } from '@prisma/client';
 import { DB } from './db.service';
 
 export class PrismaSessionStore extends SessionStore {
@@ -33,7 +33,7 @@ export class PrismaSessionStore extends SessionStore {
         }
       });
     } catch (e) {
-      if (e instanceof PrismaClientKnownRequestError) {
+      if (e instanceof Prisma.PrismaClientKnownRequestError) {
         // Unique constraint failed (we only have one unique field, so this is fine)
         if (e.code === 'P2002') {
           throw new SessionAlreadyExists();
@@ -101,7 +101,7 @@ export class PrismaSessionStore extends SessionStore {
       try {
         await this.db.getClient(tenantId).session.delete({ where: { id } });
       } catch(e) {
-        if (e instanceof PrismaClientKnownRequestError) {
+        if (e instanceof Prisma.PrismaClientKnownRequestError) {
           // Record to delete not found - this is fine, the session may be for a different tenant
           // or wasn't yet saved
           if (e.code === 'P2025') continue;

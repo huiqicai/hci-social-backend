@@ -6,7 +6,6 @@ import {
   UserRequired, ValidateBody, ValidatePathParam
 } from '@foal/core';
 import { Prisma } from '@prisma/client';
-import { PrismaClientKnownRequestError } from '@prisma/client/runtime';
 import { ParseAttributes, ValidateQuery } from '../../hooks';
 import { JTDDataType } from '../../jtd';
 import { DB } from '../../services';
@@ -187,7 +186,7 @@ export class GroupMemberController {
   
       return new HttpResponseOK(groupMember);
     } catch(e) {
-      if (e instanceof PrismaClientKnownRequestError) {
+      if (e instanceof Prisma.PrismaClientKnownRequestError) {
         // Record to update not found
         if (e.code === 'P2025') return new HttpResponseNotFound();
       }
@@ -212,7 +211,7 @@ export class GroupMemberController {
 
       return new HttpResponseNoContent();
     } catch(e) {
-      if (e instanceof PrismaClientKnownRequestError) {
+      if (e instanceof Prisma.PrismaClientKnownRequestError) {
         // Record to delete not found
         if (e.code === 'P2025') return new HttpResponseNotFound();
       }

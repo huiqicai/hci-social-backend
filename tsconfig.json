@@ -11,8 +11,7 @@
     "target": "es2017",
     "rootDir": "src",
     "lib": [
-      "es2017",
-      "dom"
+      "es2017"
     ]
   },
   "include": [

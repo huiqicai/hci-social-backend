@@ -3,7 +3,6 @@ import {
   HttpResponseUnauthorized, Post, UserRequired, ValidateBody, verifyPassword
 } from '@foal/core';
 import { Prisma } from '@prisma/client';
-import { PrismaClientKnownRequestError } from '@prisma/client/runtime';
 import { randomBytes } from 'crypto';
 import { JwtPayload, sign, verify, VerifyErrors } from 'jsonwebtoken';
 import { JTDDataType } from '../../jtd';
@@ -210,7 +209,7 @@ export class AuthController {
         data: { password: await hashPassword(body.password) }
       });
     } catch (e) {
-      if (e instanceof PrismaClientKnownRequestError) {
+      if (e instanceof Prisma.PrismaClientKnownRequestError) {
         // Record to update not found
         if (e.code === 'P2025') return new InvalidTokenResponse('Invalid user');
       }
